@@ -283,6 +283,36 @@ export function LandingPage({ session }: { session: Session | null }) {
         </div>
       </section>
 
+      <section className="border-t border-white/10 bg-black">
+        <div className="mx-auto flex max-w-6xl items-end justify-between gap-4 px-5 py-6 sm:px-6 sm:py-8">
+          <div>
+            <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
+              Find us
+            </p>
+            <p className="mt-2 text-sm text-neutral-300">
+              {CAFE.street}, {CAFE.city}
+            </p>
+          </div>
+          <a
+            href={CAFE.mapsHref}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 rounded-full border border-white/25 px-4 py-2 text-[10px] tracking-[0.18em] text-white uppercase transition hover:bg-white hover:text-black"
+          >
+            Open in Maps
+          </a>
+        </div>
+        <div className="relative h-[260px] overflow-hidden border-t border-white/10 sm:h-[380px] lg:h-[460px]">
+          <iframe
+            title="Commune Cafe on Google Maps"
+            src={CAFE.mapsEmbed}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="absolute inset-0 h-full w-full border-0 grayscale contrast-125"
+          />
+        </div>
+      </section>
+
       <SiteFooter />
     </div>
   );
