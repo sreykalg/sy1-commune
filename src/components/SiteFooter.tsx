@@ -14,7 +14,7 @@ export function SiteFooter() {
               alt={CAFE.name}
               width={160}
               height={160}
-              className="h-14 w-14 object-cover sm:h-16 sm:w-16"
+              className="h-14 w-14 rounded-full object-cover sm:h-16 sm:w-16"
             />
           </Link>
           <p className="mt-5 text-xl font-bold tracking-tight">{CAFE.name}</p>

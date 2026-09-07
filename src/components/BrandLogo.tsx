@@ -33,7 +33,7 @@ export function BrandLogo({
         alt={CAFE.name}
         width={320}
         height={320}
-        className={`${scale.box} object-cover`}
+        className={`${scale.box} rounded-full object-cover`}
         priority={size !== "sm"}
       />
       {showTagline ? (

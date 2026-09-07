@@ -66,9 +66,14 @@ export function LandingPage({ session }: { session: Session | null }) {
             <br />
             over coffee
           </h1>
-          <p className="mt-5 text-[11px] tracking-[0.22em] text-white/85 uppercase sm:mt-7 sm:text-sm sm:tracking-[0.28em]">
-            {CAFE.hours} · {CAFE.hoursNote}
-          </p>
+          <div className="mt-5 sm:mt-7">
+            <p className="text-[10px] tracking-[0.28em] text-white/55 uppercase">
+              Open Hours
+            </p>
+            <p className="mt-1.5 text-[11px] tracking-[0.22em] text-white/90 uppercase sm:text-sm sm:tracking-[0.28em]">
+              {CAFE.hours} · {CAFE.hoursNote}
+            </p>
+          </div>
           <p className="mt-2 text-[10px] tracking-[0.22em] text-white/65 uppercase sm:text-[11px] sm:tracking-[0.38em]">
             Tetuan · Zamboanga City
           </p>
@@ -148,7 +153,7 @@ export function LandingPage({ session }: { session: Session | null }) {
               sip · eat
             </h2>
             <p className="mt-4 max-w-md text-neutral-400">
-              Signatures from the bar — iced, crumbled, and pulled to share.
+              Signatures from the bar: iced, crumbled, and pulled to share.
             </p>
             <ul className="mt-10 divide-y divide-white/10">
               {MENU.map((item) => (
@@ -193,7 +198,7 @@ export function LandingPage({ session }: { session: Session | null }) {
               alt={CAFE.name}
               width={200}
               height={200}
-              className="mt-8 h-20 w-20 object-cover"
+              className="mt-8 h-20 w-20 rounded-full object-cover"
             />
             <h2 className="mt-6 text-3xl font-bold tracking-tight sm:text-4xl">{CAFE.name}</h2>
             <p className="mt-3 text-[10px] tracking-[0.18em] text-neutral-500 uppercase sm:text-[11px] sm:tracking-[0.32em]">
@@ -201,7 +206,7 @@ export function LandingPage({ session }: { session: Session | null }) {
             </p>
             <p className="mt-8 text-base leading-7 text-neutral-300 sm:text-lg sm:leading-8">
               Every cup tells a story, and every sip brings us closer together. A
-              quiet industrial house in Tetuan — matcha umami, sea salt cream,
+              quiet industrial house in Tetuan. Matcha umami, sea salt cream,
               panini, and a table meant to be shared.
             </p>
           </div>

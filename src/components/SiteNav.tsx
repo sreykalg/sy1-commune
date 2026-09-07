@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { CAFE } from "@/lib/cafe";
 import { SocialLinks } from "@/components/SocialLinks";
@@ -60,8 +61,15 @@ export function SiteNav({ session }: SiteNavProps) {
         <div className="flex items-center gap-0.5 rounded-full border border-white/25 bg-black/35 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
           <Link
             href="/"
-            className="shrink-0 px-5 py-2 text-sm font-bold tracking-tight lowercase text-white"
+            className="flex shrink-0 items-center gap-2 px-3 py-1.5 text-sm font-bold tracking-tight lowercase text-white"
           >
+            <Image
+              src="/images/logo.jpg"
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-full object-cover"
+            />
             {CAFE.name}
           </Link>
           <span className="h-4 w-px bg-white/25" />
@@ -83,8 +91,15 @@ export function SiteNav({ session }: SiteNavProps) {
         <div className="relative z-50 flex items-center justify-between rounded-full border border-white/25 bg-black/50 px-3 py-1.5 backdrop-blur-xl">
           <Link
             href="/"
-            className="px-2 text-[15px] font-bold tracking-tight lowercase"
+            className="flex items-center gap-2 px-1.5 text-[15px] font-bold tracking-tight lowercase"
           >
+            <Image
+              src="/images/logo.jpg"
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-full object-cover"
+            />
             {CAFE.name}
           </Link>
           <button
@@ -119,19 +134,14 @@ export function SiteNav({ session }: SiteNavProps) {
             />
             <div className="relative z-50 mt-2 overflow-hidden rounded-2xl border border-white/20 bg-black/80 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
               <nav className="px-3 py-2">
-                {links.map((link, index) => (
+                {links.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className="flex items-baseline gap-3 rounded-xl px-2 py-2.5 transition hover:bg-white/10"
+                    className="block rounded-xl px-3 py-2.5 text-[13px] tracking-[0.16em] text-white uppercase transition hover:bg-white/10"
                   >
-                    <span className="w-5 text-[10px] tracking-[0.18em] text-neutral-500">
-                      0{index + 1}
-                    </span>
-                    <span className="text-[13px] tracking-[0.16em] text-white uppercase">
-                      {link.label}
-                    </span>
+                    {link.label}
                   </Link>
                 ))}
                 <Link
