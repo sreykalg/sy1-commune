@@ -23,6 +23,8 @@ export type OrderItem = {
   price: number;
 };
 
+export type PaymentMethod = "cash" | "gcash" | "maya";
+
 export type Order = {
   id: string;
   createdAt: string;
@@ -32,6 +34,7 @@ export type Order = {
   subtotal?: number;
   discount?: number;
   promoLabel?: string;
+  paymentMethod?: PaymentMethod;
   voided?: boolean;
 };
 

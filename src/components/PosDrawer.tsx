@@ -26,6 +26,7 @@ import {
   topProducts,
 } from "@/lib/analytics";
 import { formatMoney } from "@/lib/menu";
+import { paymentLabel } from "@/lib/payments";
 import { promoSummary } from "@/lib/promos";
 import type { ReceiptPrinter } from "@/lib/receipt-printer";
 import type { MenuItem, Order, PosState, Promotion, Session } from "@/lib/types";
@@ -1121,6 +1122,7 @@ function HistoryPanel({
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
+                    {` · ${paymentLabel(order.paymentMethod)}`}
                     {order.voided ? " · voided" : ""}
                   </p>
                   <p className="mt-2 text-neutral-600">

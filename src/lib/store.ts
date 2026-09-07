@@ -3,6 +3,7 @@ import path from "node:path";
 import { get, put } from "@vercel/blob";
 import type { MenuItem, Order, Promotion, StaffUser, StoreData } from "@/lib/types";
 import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
+import { parsePayment } from "@/lib/payments";
 import { DEFAULT_PROMOS } from "@/lib/promos";
 import { DEFAULT_USERS } from "@/lib/users";
 
@@ -61,6 +62,7 @@ function seedOrders(): Order[] {
         baristaName: "Sale In Charge",
         items: lineItems,
         total: Number(total.toFixed(2)),
+        paymentMethod: (["cash", "gcash", "maya"] as const)[i % 3],
       });
     }
   }
@@ -94,6 +96,14 @@ function uniqueCategories(values: string[]): string[] {
 }
 
 function normalizeStore(store: StoreData): StoreData {
+  if (!Array.isArray(store.orders)) {
+    store.orders = [];
+  } else {
+    store.orders = store.orders.map((order: Order) => ({
+      ...order,
+      paymentMethod: parsePayment(order.paymentMethod),
+    }));
+  }
   if (!Array.isArray(store.menu) || store.menu.length === 0) {
     store.menu = DEFAULT_MENU.map((item) => ({ ...item }));
   } else {

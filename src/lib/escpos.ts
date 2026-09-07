@@ -1,6 +1,7 @@
 import { CAFE } from "@/lib/cafe";
 import { ordersOnDay } from "@/lib/analytics";
-import type { Order, OrderItem } from "@/lib/types";
+import { paymentLabel } from "@/lib/payments";
+import type { Order, OrderItem, PaymentMethod } from "@/lib/types";
 
 export type PaperWidth = 58 | 80;
 
@@ -12,6 +13,7 @@ export type ReceiptTicket = {
   discount: number;
   promoLabel?: string;
   total: number;
+  paymentMethod?: PaymentMethod;
   paid?: number;
   change?: number;
   at: Date;
@@ -195,14 +197,26 @@ export function customerLines(
 
   if (ticket.paid && ticket.paid > 0) {
     lines.push({ kind: "rule" });
-    lines.push({
-      kind: "text",
-      text: padLine("Cash", receiptMoney(ticket.paid), width),
-    });
-    lines.push({
-      kind: "text",
-      text: padLine("Change", receiptMoney(ticket.change ?? 0), width),
-    });
+    const method = paymentLabel(ticket.paymentMethod);
+    if (ticket.paymentMethod === "gcash" || ticket.paymentMethod === "maya") {
+      lines.push({
+        kind: "text",
+        text: padLine("Pay", method, width),
+      });
+      lines.push({
+        kind: "text",
+        text: padLine(method, receiptMoney(ticket.paid), width),
+      });
+    } else {
+      lines.push({
+        kind: "text",
+        text: padLine("Cash", receiptMoney(ticket.paid), width),
+      });
+      lines.push({
+        kind: "text",
+        text: padLine("Change", receiptMoney(ticket.change ?? 0), width),
+      });
+    }
   }
 
   lines.push({ kind: "rule" });
@@ -283,6 +297,7 @@ export function sampleTicket(now = new Date()): ReceiptTicket {
     subtotal: 467,
     discount: 0,
     total: 467,
+    paymentMethod: "cash",
     paid: 500,
     change: 33,
     at: now,

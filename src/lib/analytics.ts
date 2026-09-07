@@ -1,4 +1,5 @@
-import type { Order } from "@/lib/types";
+import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
+import type { Order, PaymentMethod } from "@/lib/types";
 
 function startOfDay(date: Date): Date {
   const copy = new Date(date);
@@ -158,6 +159,23 @@ export function changePercent(current: number, previous: number): number | null 
 
 export function totalDiscount(orders: Order[]): number {
   return liveOrders(orders).reduce((sum, order) => sum + (order.discount ?? 0), 0);
+}
+
+export function paymentStats(orders: Order[]) {
+  const buckets: Record<
+    PaymentMethod,
+    { method: PaymentMethod; label: string; count: number; sales: number }
+  > = {
+    cash: { method: "cash", label: paymentLabel("cash"), count: 0, sales: 0 },
+    gcash: { method: "gcash", label: paymentLabel("gcash"), count: 0, sales: 0 },
+    maya: { method: "maya", label: paymentLabel("maya"), count: 0, sales: 0 },
+  };
+  for (const order of liveOrders(orders)) {
+    const method = parsePayment(order.paymentMethod);
+    buckets[method].count += 1;
+    buckets[method].sales += order.total;
+  }
+  return PAYMENT_METHODS.map((item) => buckets[item.id]);
 }
 
 export function promoStats(orders: Order[]) {

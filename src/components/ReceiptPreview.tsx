@@ -10,6 +10,7 @@ import {
   type PaperWidth,
   type ReceiptTicket,
 } from "@/lib/escpos";
+import { paymentLabel } from "@/lib/payments";
 
 type ReceiptPreviewProps = {
   ticket: ReceiptTicket;
@@ -104,8 +105,20 @@ function CustomerSlip({ ticket }: { ticket: ReceiptTicket }) {
       {ticket.paid && ticket.paid > 0 ? (
         <>
           <Rule />
-          <Row left="Cash" right={receiptMoney(ticket.paid)} />
-          <Row left="Change" right={receiptMoney(ticket.change ?? 0)} />
+          {ticket.paymentMethod === "gcash" || ticket.paymentMethod === "maya" ? (
+            <>
+              <Row left="Pay" right={paymentLabel(ticket.paymentMethod)} />
+              <Row
+                left={paymentLabel(ticket.paymentMethod)}
+                right={receiptMoney(ticket.paid)}
+              />
+            </>
+          ) : (
+            <>
+              <Row left="Cash" right={receiptMoney(ticket.paid)} />
+              <Row left="Change" right={receiptMoney(ticket.change ?? 0)} />
+            </>
+          )}
         </>
       ) : null}
       <Rule />

@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/menu";
+import { paymentLabel } from "@/lib/payments";
 import {
   averageTicket,
   bestSellers,
@@ -10,6 +11,7 @@ import {
   liveOrders,
   lowSellers,
   ordersOnDay,
+  paymentStats,
   productStats,
   promoStats,
   salesByHour,
@@ -140,6 +142,7 @@ export async function AdminDashboard() {
   );
   const busy = busiestDay(week);
   const promos = promoStats(weekOrdersList);
+  const payments = paymentStats(weekOrdersList);
   const drinks = unitsSold(weekStats);
   const discounts = totalDiscount(weekOrdersList);
   const latest = liveOrders(store.orders)
@@ -280,7 +283,7 @@ export async function AdminDashboard() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section className="grid gap-6 lg:grid-cols-3">
         <div className="border border-neutral-200 bg-white p-5">
           <h2 className="text-xs tracking-[0.25em] text-neutral-500 uppercase">
             Sales by category
@@ -292,6 +295,22 @@ export async function AdminDashboard() {
               label: item.name,
               value: item.sales,
               left: `${item.qty} items`,
+              right: formatMoney(item.sales),
+            }))}
+          />
+        </div>
+
+        <div className="border border-neutral-200 bg-white p-5">
+          <h2 className="text-xs tracking-[0.25em] text-neutral-500 uppercase">
+            Payment mix
+          </h2>
+          <HorizontalBars
+            empty="No payments this week."
+            items={payments.map((item) => ({
+              key: item.method,
+              label: item.label,
+              value: item.sales,
+              left: `${item.count} tickets`,
               right: formatMoney(item.sales),
             }))}
           />
@@ -333,6 +352,7 @@ export async function AdminDashboard() {
                 <th className="py-3 font-normal">Barista</th>
                 <th className="py-3 font-normal">Items</th>
                 <th className="py-3 font-normal">Promo</th>
+                <th className="py-3 font-normal">Pay</th>
                 <th className="py-3 font-normal text-right">Total</th>
               </tr>
             </thead>
@@ -355,6 +375,9 @@ export async function AdminDashboard() {
                   </td>
                   <td className="py-3 text-neutral-500">
                     {order.promoLabel ?? "—"}
+                  </td>
+                  <td className="py-3 text-neutral-500">
+                    {paymentLabel(order.paymentMethod)}
                   </td>
                   <td className="py-3 text-right">{formatMoney(order.total)}</td>
                 </tr>

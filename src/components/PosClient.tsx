@@ -7,9 +7,18 @@ import { createOrder, openPos } from "@/actions/pos";
 import { ItemForm, PosDrawer } from "@/components/PosDrawer";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { formatMoney } from "@/lib/menu";
+import { PAYMENT_METHODS, paymentLabel } from "@/lib/payments";
 import { nextTicketNo, type ReceiptTicket } from "@/lib/escpos";
 import { useReceiptPrinter } from "@/lib/receipt-printer";
-import type { MenuItem, Order, OrderItem, PosState, Promotion, Session } from "@/lib/types";
+import type {
+  MenuItem,
+  Order,
+  OrderItem,
+  PaymentMethod,
+  PosState,
+  Promotion,
+  Session,
+} from "@/lib/types";
 
 type PosClientProps = {
   session: Session;
@@ -41,6 +50,7 @@ export function PosClient({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [tendered, setTendered] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [menuOpen, setMenuOpen] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [promoOpen, setPromoOpen] = useState(false);
@@ -75,9 +85,10 @@ export function PosClient({
       : Math.min(subtotal, promo.value)
     : 0;
   const total = Math.max(0, subtotal - discount);
-  const paid = Number(tendered) || 0;
-  const change = paid >= total ? paid - total : 0;
-  const canCharge = pos.isOpen && cart.length > 0 && paid >= total;
+  const isCash = paymentMethod === "cash";
+  const paid = isCash ? Number(tendered) || 0 : total;
+  const change = isCash && paid >= total ? paid - total : 0;
+  const canCharge = pos.isOpen && cart.length > 0 && (!isCash || paid >= total);
 
   function addItem(id: string, name: string, price: number) {
     if (!pos.isOpen) {
@@ -110,6 +121,7 @@ export function PosClient({
   function cancelOrder() {
     setCart([]);
     setTendered("");
+    setPaymentMethod("cash");
     setPromoId(null);
     setPromoOpen(false);
     setMessage(null);
@@ -124,6 +136,7 @@ export function PosClient({
       discount,
       promoLabel: promo?.label,
       total,
+      paymentMethod,
       paid,
       change,
       at: new Date(),
@@ -419,37 +432,64 @@ export function PosClient({
           </ul>
 
           <div className="shrink-0 space-y-3 border-t border-neutral-200 px-4 py-4">
-            <label className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-neutral-500">Amount</span>
-              <input
-                inputMode="numeric"
-                value={tendered}
-                onChange={(event) =>
-                  setTendered(event.target.value.replace(/[^\d]/g, ""))
-                }
-                placeholder="0"
-                className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-right outline-none focus:border-black"
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setTendered(String(total || ""))}
-                className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
-              >
-                Exact
-              </button>
-              {CASH_PRESETS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTendered(String(value))}
-                  className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
-                >
-                  {formatMoney(value)}
-                </button>
-              ))}
+            <div>
+              <p className="mb-2 text-sm text-neutral-500">Pay with</p>
+              <div className="grid grid-cols-3 gap-2">
+                {PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(method.id)}
+                    className={`rounded-xl border py-2 text-xs sm:text-sm ${
+                      paymentMethod === method.id
+                        ? "border-black bg-black text-white"
+                        : "border-neutral-300 bg-white hover:border-black"
+                    }`}
+                  >
+                    {method.label}
+                  </button>
+                ))}
+              </div>
             </div>
+            {isCash ? (
+              <>
+                <label className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-neutral-500">Amount</span>
+                  <input
+                    inputMode="numeric"
+                    value={tendered}
+                    onChange={(event) =>
+                      setTendered(event.target.value.replace(/[^\d]/g, ""))
+                    }
+                    placeholder="0"
+                    className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-right outline-none focus:border-black"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTendered(String(total || ""))}
+                    className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
+                  >
+                    Exact
+                  </button>
+                  {CASH_PRESETS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTendered(String(value))}
+                      className="rounded-full border border-neutral-300 px-3 py-1 text-xs hover:border-black"
+                    >
+                      {formatMoney(value)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-500">
+                {paymentLabel(paymentMethod)} · exact {formatMoney(total)}
+              </p>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-neutral-500">Subtotal</span>
               <span>{formatMoney(subtotal)}</span>
@@ -465,8 +505,8 @@ export function PosClient({
               <span className="text-lg font-semibold">{formatMoney(total)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-neutral-500">Change</span>
-              <span>{formatMoney(change)}</span>
+              <span className="text-neutral-500">{isCash ? "Change" : "Paid"}</span>
+              <span>{formatMoney(isCash ? change : total)}</span>
             </div>
             {promoOpen ? (
               <div className="grid grid-cols-2 gap-2">
@@ -531,13 +571,14 @@ export function PosClient({
               onClick={() =>
                 startTransition(async () => {
                   const ticket = currentTicket();
-                  const result = await createOrder(cart, promoId);
+                  const result = await createOrder(cart, promoId, paymentMethod);
                   if (result.error) {
                     setMessage(result.error);
                     return;
                   }
                   setCart([]);
                   setTendered("");
+                  setPaymentMethod("cash");
                   setPromoId(null);
                   setPromoOpen(false);
                   if (printer.connected) {

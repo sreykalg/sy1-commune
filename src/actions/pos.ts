@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
+import { parsePayment } from "@/lib/payments";
 import { updateStore } from "@/lib/store";
 import type { OrderItem } from "@/lib/types";
 
@@ -39,7 +40,11 @@ export async function closePos() {
   revalidatePath("/admin");
 }
 
-export async function createOrder(cart: OrderItem[], promoId?: string | null) {
+export async function createOrder(
+  cart: OrderItem[],
+  promoId?: string | null,
+  paymentMethod?: string | null,
+) {
   const session = await requireBarista();
 
   if (cart.length === 0) {
@@ -99,6 +104,7 @@ export async function createOrder(cart: OrderItem[], promoId?: string | null) {
       discount,
       promoLabel,
       total,
+      paymentMethod: parsePayment(paymentMethod),
     });
   });
 
