@@ -1,11 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { get, put } from "@vercel/blob";
 import type { MenuItem, Order, Promotion, StaffUser, StoreData } from "@/lib/types";
 import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
 import { DEFAULT_PROMOS } from "@/lib/promos";
 import { DEFAULT_USERS } from "@/lib/users";
 
 const STORE_PATH = path.join(process.cwd(), "data", "store.json");
+const BLOB_STORE_KEY = "commune/store.json";
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -131,32 +133,90 @@ function normalizeStore(store: StoreData): StoreData {
   return store;
 }
 
-async function readStore(): Promise<StoreData> {
+export function usesBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+}
+
+async function readFileStore(): Promise<StoreData | null> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as StoreData;
-    const hadMenu = Array.isArray(parsed.menu) && parsed.menu.length > 0;
-    const hadCategories =
-      Array.isArray(parsed.categories) && parsed.categories.length > 0;
-    const hadPromos =
-      Array.isArray(parsed.promotions) && parsed.promotions.length > 0;
-    const hadUsers = Array.isArray(parsed.users) && parsed.users.length > 0;
-    const store = normalizeStore(parsed);
-    if (!hadMenu || !hadCategories || !hadPromos || !hadUsers) {
-      await writeStore(store);
-    }
-    return store;
+    return JSON.parse(raw) as StoreData;
   } catch {
-    const seeded = emptyStore();
-    await mkdir(path.dirname(STORE_PATH), { recursive: true });
-    await writeFile(STORE_PATH, JSON.stringify(seeded, null, 2));
-    return seeded;
+    return null;
   }
 }
 
-async function writeStore(store: StoreData): Promise<void> {
+async function writeFileStore(store: StoreData) {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2));
+}
+
+async function readBlobStore(): Promise<StoreData | null> {
+  try {
+    const result = await get(BLOB_STORE_KEY, {
+      access: "private",
+      useCache: false,
+    });
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      return null;
+    }
+    const raw = await new Response(result.stream).text();
+    return JSON.parse(raw) as StoreData;
+  } catch {
+    return null;
+  }
+}
+
+async function writeBlobStore(store: StoreData) {
+  await put(BLOB_STORE_KEY, JSON.stringify(store), {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+    cacheControlMaxAge: 60,
+  });
+}
+
+async function readStore(): Promise<StoreData> {
+  if (usesBlobStorage()) {
+    const fromBlob = await readBlobStore();
+    if (fromBlob) return normalizeStore(fromBlob);
+    const bundled = await readFileStore();
+    const seeded = normalizeStore(bundled ?? emptyStore());
+    await writeBlobStore(seeded);
+    return seeded;
+  }
+
+  const fromFile = await readFileStore();
+  if (!fromFile) {
+    const seeded = emptyStore();
+    await writeFileStore(seeded);
+    return seeded;
+  }
+  const hadMenu = Array.isArray(fromFile.menu) && fromFile.menu.length > 0;
+  const hadCategories =
+    Array.isArray(fromFile.categories) && fromFile.categories.length > 0;
+  const hadPromos =
+    Array.isArray(fromFile.promotions) && fromFile.promotions.length > 0;
+  const hadUsers = Array.isArray(fromFile.users) && fromFile.users.length > 0;
+  const store = normalizeStore(fromFile);
+  if (!hadMenu || !hadCategories || !hadPromos || !hadUsers) {
+    await writeFileStore(store);
+  }
+  return store;
+}
+
+async function writeStore(store: StoreData): Promise<void> {
+  if (usesBlobStorage()) {
+    await writeBlobStore(store);
+    return;
+  }
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Connect a Vercel Blob store to this project so POS data can save.",
+    );
+  }
+  await writeFileStore(store);
 }
 
 function withStore<T>(fn: (store: StoreData) => Promise<T> | T): Promise<T> {

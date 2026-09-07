@@ -6,6 +6,7 @@ import {
   SESSION_COOKIE,
   encodeSession,
   homeForRole,
+  sessionCookieOptions,
 } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 import { toSession } from "@/lib/users";
@@ -35,12 +36,7 @@ export async function login(
 
   const session = toSession(user);
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, encodeSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 12,
-  });
+  jar.set(SESSION_COOKIE, encodeSession(session), sessionCookieOptions());
 
   redirect(homeForRole(session.role));
 }

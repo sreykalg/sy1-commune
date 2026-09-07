@@ -2,10 +2,11 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { put } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { menuItemId } from "@/lib/menu";
-import { updateStore } from "@/lib/store";
+import { updateStore, usesBlobStorage } from "@/lib/store";
 
 const PHOTO_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -30,7 +31,11 @@ function refresh() {
 }
 
 function isSafeImage(src: string) {
-  return src.startsWith("/images/") || src.startsWith("/uploads/menu/");
+  return (
+    src.startsWith("/images/") ||
+    src.startsWith("/uploads/menu/") ||
+    src.includes(".blob.vercel-storage.com/")
+  );
 }
 
 function readText(formData: FormData, key: string) {
@@ -48,9 +53,20 @@ async function saveMenuPhoto(file: File, id: string) {
 
   const safeId = id.replace(/[^a-z0-9-]/gi, "") || "item";
   const filename = `${safeId}-${Date.now().toString(36)}.${ext}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  if (usesBlobStorage()) {
+    const blob = await put(`uploads/menu/${filename}`, bytes, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: file.type,
+    });
+    return { src: blob.url };
+  }
+
   const dir = path.join(process.cwd(), "public", "uploads", "menu");
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
+  await writeFile(path.join(dir, filename), bytes);
   return { src: `/uploads/menu/${filename}` };
 }
 
@@ -163,7 +179,7 @@ export async function createMenuItem(formData: FormData) {
   if (photo) {
     const saved = await saveMenuPhoto(photo, id);
     if ("error" in saved && saved.error) return { error: saved.error };
-    if ("src" in saved) image = saved.src;
+    if ("src" in saved && saved.src) image = saved.src;
   }
 
   await updateStore((store) => {

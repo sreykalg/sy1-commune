@@ -39,3 +39,13 @@ export async function getSession(): Promise<Session | null> {
 export function homeForRole(role: Session["role"]): string {
   return role === "admin" ? "/admin" : "/pos";
 }
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60 * 60 * 12,
+    secure: process.env.VERCEL === "1",
+  };
+}

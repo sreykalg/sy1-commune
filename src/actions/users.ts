@@ -6,6 +6,7 @@ import {
   SESSION_COOKIE,
   encodeSession,
   getSession,
+  sessionCookieOptions,
 } from "@/lib/auth";
 import { updateStore } from "@/lib/store";
 import {
@@ -152,12 +153,7 @@ export async function updateStaffUser(input: {
 
   if (nextUser && session.userId === nextUser.id) {
     const jar = await cookies();
-    jar.set(SESSION_COOKIE, encodeSession(toSession(nextUser)), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+    jar.set(SESSION_COOKIE, encodeSession(toSession(nextUser)), sessionCookieOptions());
   }
 
   refresh();
