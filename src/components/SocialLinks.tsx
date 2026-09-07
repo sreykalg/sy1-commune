@@ -24,9 +24,13 @@ function SocialIcon({ id }: { id: SocialId }) {
   return null;
 }
 
-export function SocialLinks() {
+export function SocialLinks({
+  className = "",
+}: {
+  className?: string;
+}) {
   return (
-    <div className="flex items-center gap-3">
+    <div className={`flex items-center gap-2.5 ${className}`.trim()}>
       {CAFE.socials.map((social) => (
         <a
           key={social.id}
