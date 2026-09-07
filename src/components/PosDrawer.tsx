@@ -28,6 +28,7 @@ import {
 import { formatMoney } from "@/lib/menu";
 import { paymentLabel } from "@/lib/payments";
 import { promoSummary } from "@/lib/promos";
+import { ticketNoForOrder } from "@/lib/escpos";
 import type { ReceiptPrinter } from "@/lib/receipt-printer";
 import type { MenuItem, Order, PosState, Promotion, Session } from "@/lib/types";
 
@@ -42,6 +43,7 @@ type PosDrawerProps = {
   orders: Order[];
   printer: ReceiptPrinter;
   onClose: () => void;
+  onReprint: (order: Order) => void;
 };
 
 function dayKey(date: Date) {
@@ -68,6 +70,7 @@ export function PosDrawer({
   orders,
   printer,
   onClose,
+  onReprint,
 }: PosDrawerProps) {
   const [panel, setPanel] = useState<Panel>("sales");
   const [pending, startTransition] = useTransition();
@@ -156,6 +159,7 @@ export function PosDrawer({
               pending={pending}
               startTransition={startTransition}
               onNotice={setNotice}
+              onReprint={onReprint}
             />
           ) : null}
           {notice && panel !== "menu" && panel !== "categories" && panel !== "promos" ? (
@@ -1072,11 +1076,13 @@ function HistoryPanel({
   pending,
   startTransition,
   onNotice,
+  onReprint,
 }: {
   orders: Order[];
   pending: boolean;
   startTransition: (fn: () => Promise<void> | void) => void;
   onNotice: (value: string | null) => void;
+  onReprint: (order: Order) => void;
 }) {
   const [picked, setPicked] = useState(dayKey(new Date()));
   const tickets = [...ordersOnDay(orders, parseDay(picked))].reverse();
@@ -1116,6 +1122,9 @@ function HistoryPanel({
                 <div>
                   <p className={order.voided ? "text-neutral-400 line-through" : "font-medium"}>
                     {formatMoney(order.total)}
+                    <span className="ml-2 font-normal text-neutral-500">
+                      #{ticketNoForOrder(orders, order)}
+                    </span>
                   </p>
                   <p className="mt-1 text-xs text-neutral-500">
                     {new Date(order.createdAt).toLocaleTimeString([], {
@@ -1131,21 +1140,41 @@ function HistoryPanel({
                       .join(", ")}
                   </p>
                 </div>
-                {!order.voided ? (
+                <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        const result = await voidOrder(order.id);
-                        onNotice(result.error ?? "Ticket voided.");
-                      })
-                    }
-                    className="text-xs text-red-600 underline"
+                    aria-label={`Print order ${ticketNoForOrder(orders, order)}`}
+                    onClick={() => onReprint(order)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-600 hover:bg-neutral-100 hover:text-black"
                   >
-                    Void
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor">
+                      <path d="M7 8V4h10v4" strokeWidth="1.7" />
+                      <path
+                        d="M6 18H5a2 2 0 0 1-2-2v-5h18v5a2 2 0 0 1-2 2h-1"
+                        strokeWidth="1.7"
+                      />
+                      <path d="M6 14h12v6H6z" strokeWidth="1.7" />
+                    </svg>
                   </button>
-                ) : null}
+                  {!order.voided ? (
+                    <button
+                      type="button"
+                      aria-label={`Void order ${ticketNoForOrder(orders, order)}`}
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const result = await voidOrder(order.id);
+                          onNotice(result.error ?? "Ticket voided.");
+                        })
+                      }
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-red-600 hover:bg-red-50 disabled:opacity-40"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor">
+                        <path d="M5 7h14M10 7V5h4v2M8 7l1 12h6l1-12" strokeWidth="1.7" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </li>
           ))

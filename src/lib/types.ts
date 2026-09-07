@@ -35,6 +35,9 @@ export type Order = {
   discount?: number;
   promoLabel?: string;
   paymentMethod?: PaymentMethod;
+  ticketNo?: string;
+  paid?: number;
+  change?: number;
   voided?: boolean;
 };
 

@@ -47,6 +47,48 @@ export function nextTicketNo(orders: Order[], now = new Date()): string {
   return String(ordersOnDay(orders, now).length + 1).padStart(3, "0");
 }
 
+function sameCalendarDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+export function ticketNoForOrder(orders: Order[], order: Order): string {
+  if (order.ticketNo) return order.ticketNo;
+  const day = new Date(order.createdAt);
+  const same = [...orders]
+    .filter((entry) => sameCalendarDay(new Date(entry.createdAt), day))
+    .sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    );
+  const index = same.findIndex((entry) => entry.id === order.id);
+  return String(Math.max(index, 0) + 1).padStart(3, "0");
+}
+
+export function receiptFromOrder(order: Order, orders: Order[] = []): ReceiptTicket {
+  const subtotal =
+    order.subtotal ??
+    order.items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const paid = order.paid ?? order.total;
+  const digital =
+    order.paymentMethod === "gcash" || order.paymentMethod === "maya";
+  return {
+    ticketNo: ticketNoForOrder(orders, order),
+    cashier: order.baristaName,
+    items: order.items,
+    subtotal,
+    discount: order.discount ?? 0,
+    promoLabel: order.promoLabel,
+    total: order.total,
+    paymentMethod: order.paymentMethod,
+    paid,
+    change: order.change ?? (digital ? 0 : Math.max(0, paid - order.total)),
+    at: new Date(order.createdAt),
+  };
+}
+
 export function receiptMoney(amount: number): string {
   return `P${Math.round(amount).toLocaleString("en-PH")}`;
 }

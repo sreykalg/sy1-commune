@@ -8,7 +8,7 @@ import { ItemForm, PosDrawer } from "@/components/PosDrawer";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { formatMoney } from "@/lib/menu";
 import { PAYMENT_METHODS, paymentLabel } from "@/lib/payments";
-import { nextTicketNo, type ReceiptTicket } from "@/lib/escpos";
+import { nextTicketNo, receiptFromOrder, type ReceiptTicket } from "@/lib/escpos";
 import { useReceiptPrinter } from "@/lib/receipt-printer";
 import type {
   MenuItem,
@@ -56,6 +56,7 @@ export function PosClient({
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoId, setPromoId] = useState<string | null>(null);
   const [previewTicket, setPreviewTicket] = useState<ReceiptTicket | null>(null);
+  const [lastTicket, setLastTicket] = useState<ReceiptTicket | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const printer = useReceiptPrinter();
@@ -144,11 +145,20 @@ export function PosClient({
   }
 
   function printTicket() {
-    if (cart.length === 0) {
-      setMessage("Add items before printing.");
+    if (cart.length > 0) {
+      setPreviewTicket(currentTicket());
       return;
     }
-    setPreviewTicket(currentTicket());
+    if (lastTicket) {
+      setPreviewTicket(lastTicket);
+      return;
+    }
+    setMessage("Add items before printing.");
+  }
+
+  function reprintOrder(order: Order) {
+    setMenuOpen(false);
+    setPreviewTicket(receiptFromOrder(order, orders));
   }
 
   async function sendSlips(ticket: ReceiptTicket) {
@@ -265,6 +275,7 @@ export function PosClient({
           orders={orders}
           printer={printer}
           onClose={() => setMenuOpen(false)}
+          onReprint={reprintOrder}
         />
       ) : null}
 
@@ -557,7 +568,7 @@ export function PosClient({
                 type="button"
                 onClick={printTicket}
                 className={`rounded-xl border py-2.5 text-xs sm:text-sm ${
-                  printer.connected
+                  printer.connected || lastTicket || cart.length > 0
                     ? "border-black bg-black text-white"
                     : "border-neutral-300 hover:border-black"
                 }`}
@@ -571,11 +582,21 @@ export function PosClient({
               onClick={() =>
                 startTransition(async () => {
                   const ticket = currentTicket();
-                  const result = await createOrder(cart, promoId, paymentMethod);
+                  const result = await createOrder(
+                    cart,
+                    promoId,
+                    paymentMethod,
+                    paid,
+                  );
                   if (result.error) {
                     setMessage(result.error);
                     return;
                   }
+                  const saved: ReceiptTicket = {
+                    ...ticket,
+                    ticketNo: result.ticketNo || ticket.ticketNo,
+                  };
+                  setLastTicket(saved);
                   setCart([]);
                   setTendered("");
                   setPaymentMethod("cash");
@@ -583,18 +604,20 @@ export function PosClient({
                   setPromoOpen(false);
                   if (printer.connected) {
                     try {
-                      await printer.print(ticket);
+                      await printer.print(saved);
                       setMessage(
-                        `Paid ${formatMoney(result.total ?? 0)} · customer + barista printed`,
+                        `Paid ${formatMoney(result.total ?? 0)} · printed · tap Print to reprint`,
                       );
                     } catch {
                       setMessage(
-                        `Paid ${formatMoney(result.total ?? 0)} · printer failed`,
+                        `Paid ${formatMoney(result.total ?? 0)} · printer failed · tap Print`,
                       );
                     }
                     return;
                   }
-                  setMessage(`Paid ${formatMoney(result.total ?? 0)}`);
+                  setMessage(
+                    `Paid ${formatMoney(result.total ?? 0)} · tap Print for last receipt`,
+                  );
                 })
               }
               className="relative w-full rounded-2xl border-2 border-black py-3 text-sm font-medium disabled:opacity-40"

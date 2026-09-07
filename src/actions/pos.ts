@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
+import { nextTicketNo } from "@/lib/escpos";
 import { parsePayment } from "@/lib/payments";
 import { updateStore } from "@/lib/store";
 import type { OrderItem } from "@/lib/types";
@@ -44,6 +45,7 @@ export async function createOrder(
   cart: OrderItem[],
   promoId?: string | null,
   paymentMethod?: string | null,
+  tendered?: number | null,
 ) {
   const session = await requireBarista();
 
@@ -54,6 +56,7 @@ export async function createOrder(
   const priced: OrderItem[] = [];
   let error: string | undefined;
   let charged = 0;
+  let ticketNo = "";
 
   await updateStore((store) => {
     if (!store.pos.isOpen) {
@@ -93,7 +96,15 @@ export async function createOrder(
           : Math.min(subtotal, Math.round(found.value));
     }
     const total = Math.max(0, subtotal - discount);
+    const method = parsePayment(paymentMethod);
+    const cashIn =
+      method === "cash" ? Math.max(0, Math.round(Number(tendered) || 0)) : total;
+    if (method === "cash" && cashIn < total) {
+      error = "Cash tendered is short.";
+      return;
+    }
     charged = total;
+    ticketNo = nextTicketNo(store.orders);
 
     store.orders.push({
       id: `ord-${Date.now()}`,
@@ -104,7 +115,10 @@ export async function createOrder(
       discount,
       promoLabel,
       total,
-      paymentMethod: parsePayment(paymentMethod),
+      paymentMethod: method,
+      ticketNo,
+      paid: cashIn,
+      change: method === "cash" ? cashIn - total : 0,
     });
   });
 
@@ -112,7 +126,7 @@ export async function createOrder(
 
   revalidatePath("/pos");
   revalidatePath("/admin");
-  return { ok: true, total: charged };
+  return { ok: true, total: charged, ticketNo };
 }
 
 export async function voidOrder(orderId: string) {
