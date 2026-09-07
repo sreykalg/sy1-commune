@@ -3,8 +3,8 @@ import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SocialLinks } from "@/components/SocialLinks";
 import { CAFE } from "@/lib/cafe";
-import { MENU, formatMoney } from "@/lib/menu";
-import type { Session } from "@/lib/types";
+import { DEFAULT_MENU, formatMoney } from "@/lib/menu";
+import type { MenuItem, Session } from "@/lib/types";
 
 function Eyebrow({ children }: { children: string }) {
   return (
@@ -41,7 +41,13 @@ function Photo({
   );
 }
 
-export function LandingPage({ session }: { session: Session | null }) {
+export function LandingPage({
+  session,
+  menu = DEFAULT_MENU,
+}: {
+  session: Session | null;
+  menu?: MenuItem[];
+}) {
   return (
     <div className="bg-black text-white">
       <section className="relative min-h-svh overflow-hidden">
@@ -156,7 +162,9 @@ export function LandingPage({ session }: { session: Session | null }) {
               Signatures from the bar: iced, crumbled, and pulled to share.
             </p>
             <ul className="mt-10 divide-y divide-white/10">
-              {MENU.map((item) => (
+              {menu
+                .filter((item) => item.available !== false)
+                .map((item) => (
                 <li
                   key={item.id}
                   className="flex items-baseline justify-between gap-3 py-4 sm:gap-6"

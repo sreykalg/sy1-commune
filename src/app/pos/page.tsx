@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { PosClient } from "@/components/PosClient";
-import { StaffHeader } from "@/components/StaffHeader";
 import { getSession } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 
@@ -11,18 +10,17 @@ export default async function PosPage() {
   }
 
   const store = await getStore();
-  const recentOrders = [...store.orders]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 8);
 
   return (
-    <main className="min-h-svh bg-black">
-      <StaffHeader
+    <main className="h-svh overflow-hidden bg-neutral-100 text-black">
+      <PosClient
         session={session}
-        title="POS"
-        subtitle="Sale In Charge"
+        pos={store.pos}
+        menu={store.menu}
+        categories={store.categories}
+        promotions={store.promotions}
+        orders={store.orders}
       />
-      <PosClient pos={store.pos} recentOrders={recentOrders} />
     </main>
   );
 }

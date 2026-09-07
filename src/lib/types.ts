@@ -12,6 +12,8 @@ export type MenuItem = {
   name: string;
   price: number;
   category: string;
+  image: string;
+  available: boolean;
 };
 
 export type OrderItem = {
@@ -27,6 +29,10 @@ export type Order = {
   baristaName: string;
   items: OrderItem[];
   total: number;
+  subtotal?: number;
+  discount?: number;
+  promoLabel?: string;
+  voided?: boolean;
 };
 
 export type PosState = {
@@ -35,7 +41,18 @@ export type PosState = {
   openedBy: string | null;
 };
 
+export type Promotion = {
+  id: string;
+  label: string;
+  type: "percent" | "amount";
+  value: number;
+  active: boolean;
+};
+
 export type StoreData = {
   pos: PosState;
   orders: Order[];
+  menu: MenuItem[];
+  categories: string[];
+  promotions: Promotion[];
 };

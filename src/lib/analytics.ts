@@ -6,19 +6,24 @@ function startOfDay(date: Date): Date {
   return copy;
 }
 
+export function liveOrders(orders: Order[]): Order[] {
+  return orders.filter((order) => !order.voided);
+}
+
 export function sumSales(orders: Order[]): number {
-  return orders.reduce((sum, order) => sum + order.total, 0);
+  return liveOrders(orders).reduce((sum, order) => sum + order.total, 0);
 }
 
 export function averageTicket(orders: Order[]): number {
-  if (orders.length === 0) return 0;
-  return sumSales(orders) / orders.length;
+  const live = liveOrders(orders);
+  if (live.length === 0) return 0;
+  return sumSales(live) / live.length;
 }
 
 export function ordersOnDay(orders: Order[], day: Date): Order[] {
   const start = startOfDay(day).getTime();
   const end = start + 24 * 60 * 60 * 1000;
-  return orders.filter((order) => {
+  return liveOrders(orders).filter((order) => {
     const time = new Date(order.createdAt).getTime();
     return time >= start && time < end;
   });
@@ -41,7 +46,7 @@ export function lastNDays(orders: Order[], days: number, now = new Date()) {
 export function topProducts(orders: Order[], limit = 5) {
   const map = new Map<string, { name: string; qty: number; sales: number }>();
 
-  for (const order of orders) {
+  for (const order of liveOrders(orders)) {
     for (const item of order.items) {
       const current = map.get(item.productId) ?? {
         name: item.name,

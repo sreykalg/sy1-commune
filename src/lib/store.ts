@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Order, StoreData } from "@/lib/types";
+import type { MenuItem, Order, Promotion, StoreData } from "@/lib/types";
+import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
+import { DEFAULT_PROMOS } from "@/lib/promos";
 
 const STORE_PATH = path.join(process.cwd(), "data", "store.json");
 
@@ -67,13 +69,68 @@ function emptyStore(): StoreData {
   return {
     pos: { isOpen: false, openedAt: null, openedBy: null },
     orders: seedOrders(),
+    menu: DEFAULT_MENU.map((item) => ({ ...item })),
+    categories: [...MENU_CATEGORIES],
+    promotions: DEFAULT_PROMOS.map((item) => ({ ...item })),
   };
+}
+
+function uniqueCategories(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const name = value.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(name);
+  }
+  return result;
+}
+
+function normalizeStore(store: StoreData): StoreData {
+  if (!Array.isArray(store.menu) || store.menu.length === 0) {
+    store.menu = DEFAULT_MENU.map((item) => ({ ...item }));
+  } else {
+    store.menu = store.menu.map((item: MenuItem) => ({
+      ...item,
+      available: item.available !== false,
+      image: item.image || "/images/drinks.jpg",
+    }));
+  }
+  store.categories = uniqueCategories([
+    ...(store.categories ?? []),
+    ...MENU_CATEGORIES,
+    ...store.menu.map((item) => item.category),
+  ]);
+  if (!Array.isArray(store.promotions) || store.promotions.length === 0) {
+    store.promotions = DEFAULT_PROMOS.map((item) => ({ ...item }));
+  } else {
+    store.promotions = store.promotions.map((item: Promotion) => ({
+      ...item,
+      active: item.active !== false,
+      type: item.type === "amount" ? "amount" : "percent",
+      value: Number(item.value) || 0,
+    }));
+  }
+  return store;
 }
 
 async function readStore(): Promise<StoreData> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
-    return JSON.parse(raw) as StoreData;
+    const parsed = JSON.parse(raw) as StoreData;
+    const hadMenu = Array.isArray(parsed.menu) && parsed.menu.length > 0;
+    const hadCategories =
+      Array.isArray(parsed.categories) && parsed.categories.length > 0;
+    const hadPromos =
+      Array.isArray(parsed.promotions) && parsed.promotions.length > 0;
+    const store = normalizeStore(parsed);
+    if (!hadMenu || !hadCategories || !hadPromos) {
+      await writeStore(store);
+    }
+    return store;
   } catch {
     const seeded = emptyStore();
     await mkdir(path.dirname(STORE_PATH), { recursive: true });

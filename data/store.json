@@ -589,5 +589,103 @@
       ],
       "total": 318
     }
+  ],
+  "menu": [
+    {
+      "id": "spanish-latte",
+      "name": "Spanish Latte",
+      "price": 149,
+      "category": "Coffee",
+      "image": "/images/drinks.jpg",
+      "available": true
+    },
+    {
+      "id": "seasalt-cream",
+      "name": "Sea Salt Cream",
+      "price": 159,
+      "category": "Signature",
+      "image": "/images/signatures.jpg",
+      "available": true
+    },
+    {
+      "id": "caramel-macchiato",
+      "name": "Caramel Macchiato",
+      "price": 159,
+      "category": "Coffee",
+      "image": "/images/drinks.jpg",
+      "available": true
+    },
+    {
+      "id": "biscoff-latte",
+      "name": "Biscoff Latte",
+      "price": 169,
+      "category": "Signature",
+      "image": "/images/menu-carrier.jpg",
+      "available": true
+    },
+    {
+      "id": "cookie-crumble",
+      "name": "Cookie Crumble",
+      "price": 159,
+      "category": "Signature",
+      "image": "/images/cups.jpg",
+      "available": true
+    },
+    {
+      "id": "strawberry-crumble",
+      "name": "Strawberry Crumble",
+      "price": 159,
+      "category": "Signature",
+      "image": "/images/cups.jpg",
+      "available": true
+    },
+    {
+      "id": "matcha-umami",
+      "name": "Matcha Umami",
+      "price": 169,
+      "category": "Tea",
+      "image": "/images/matcha-umami.jpg",
+      "available": true
+    },
+    {
+      "id": "panini",
+      "name": "Panini",
+      "price": 189,
+      "category": "Dessert",
+      "image": "/images/carrier.jpg",
+      "available": true
+    }
+  ],
+  "categories": [
+    "Coffee",
+    "Signature",
+    "Tea",
+    "Dessert",
+    "Soda",
+    "Non Coffee",
+    "Food"
+  ],
+  "promotions": [
+    {
+      "id": "senior",
+      "label": "Senior 20%",
+      "type": "percent",
+      "value": 20,
+      "active": true
+    },
+    {
+      "id": "pwd",
+      "label": "PWD 20%",
+      "type": "percent",
+      "value": 20,
+      "active": true
+    },
+    {
+      "id": "ten",
+      "label": "10% off",
+      "type": "percent",
+      "value": 10,
+      "active": true
+    }
   ]
 }

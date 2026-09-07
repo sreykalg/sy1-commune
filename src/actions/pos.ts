@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { MENU } from "@/lib/menu";
 import { updateStore } from "@/lib/store";
 import type { OrderItem } from "@/lib/types";
 
@@ -40,44 +39,65 @@ export async function closePos() {
   revalidatePath("/admin");
 }
 
-export async function createOrder(cart: OrderItem[]) {
+export async function createOrder(cart: OrderItem[], promoId?: string | null) {
   const session = await requireBarista();
 
   if (cart.length === 0) {
     return { error: "Add a drink before charging." };
   }
 
-  const priced: OrderItem[] = cart.map((line) => {
-    const menuItem = MENU.find((item) => item.id === line.productId);
-    if (!menuItem) {
-      throw new Error("Unknown menu item.");
-    }
-    return {
-      productId: menuItem.id,
-      name: menuItem.name,
-      qty: Math.max(1, Math.floor(line.qty)),
-      price: menuItem.price,
-    };
-  });
-
-  const total = Number(
-    priced
-      .reduce((sum, item) => sum + item.price * item.qty, 0)
-      .toFixed(2),
-  );
-
+  const priced: OrderItem[] = [];
   let error: string | undefined;
+  let charged = 0;
 
   await updateStore((store) => {
     if (!store.pos.isOpen) {
       error = "Open the POS before taking orders.";
       return;
     }
+
+    for (const line of cart) {
+      const menuItem = store.menu.find((item) => item.id === line.productId);
+      if (!menuItem || !menuItem.available) {
+        error = "One of the items is no longer on the menu.";
+        return;
+      }
+      priced.push({
+        productId: menuItem.id,
+        name: menuItem.name,
+        qty: Math.max(1, Math.floor(line.qty)),
+        price: menuItem.price,
+      });
+    }
+
+    const subtotal = priced.reduce((sum, item) => sum + item.price * item.qty, 0);
+    let discount = 0;
+    let promoLabel: string | undefined;
+    if (promoId) {
+      const found = store.promotions.find(
+        (entry) => entry.id === promoId && entry.active,
+      );
+      if (!found) {
+        error = "That promotion is no longer available.";
+        return;
+      }
+      promoLabel = found.label;
+      discount =
+        found.type === "percent"
+          ? Math.round((subtotal * found.value) / 100)
+          : Math.min(subtotal, Math.round(found.value));
+    }
+    const total = Math.max(0, subtotal - discount);
+    charged = total;
+
     store.orders.push({
       id: `ord-${Date.now()}`,
       createdAt: new Date().toISOString(),
       baristaName: session.name,
       items: priced,
+      subtotal,
+      discount,
+      promoLabel,
       total,
     });
   });
@@ -86,5 +106,24 @@ export async function createOrder(cart: OrderItem[]) {
 
   revalidatePath("/pos");
   revalidatePath("/admin");
-  return { ok: true, total };
+  return { ok: true, total: charged };
+}
+
+export async function voidOrder(orderId: string) {
+  await requireBarista();
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    const order = store.orders.find((entry) => entry.id === orderId);
+    if (!order) {
+      error = "Ticket not found.";
+      return;
+    }
+    order.voided = true;
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
 }
