@@ -1,0 +1,593 @@
+{
+  "pos": {
+    "isOpen": true,
+    "openedAt": "2026-09-07T06:40:46.318Z",
+    "openedBy": "Sale In Charge"
+  },
+  "orders": [
+    {
+      "id": "ord-6-0",
+      "createdAt": "2026-09-01T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        }
+      ],
+      "total": 308
+    },
+    {
+      "id": "ord-6-1",
+      "createdAt": "2026-09-01T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 2,
+          "price": 189
+        }
+      ],
+      "total": 378
+    },
+    {
+      "id": "ord-6-2",
+      "createdAt": "2026-09-01T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        },
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 1,
+          "price": 169
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-6-3",
+      "createdAt": "2026-09-01T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-5-0",
+      "createdAt": "2026-09-02T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 1,
+          "price": 189
+        }
+      ],
+      "total": 348
+    },
+    {
+      "id": "ord-5-1",
+      "createdAt": "2026-09-02T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-5-2",
+      "createdAt": "2026-09-02T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 1,
+          "price": 189
+        },
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 348
+    },
+    {
+      "id": "ord-5-3",
+      "createdAt": "2026-09-02T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 2,
+          "price": 149
+        }
+      ],
+      "total": 298
+    },
+    {
+      "id": "ord-5-4",
+      "createdAt": "2026-09-02T08:38:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-4-0",
+      "createdAt": "2026-09-03T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 1,
+          "price": 169
+        },
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 328
+    },
+    {
+      "id": "ord-4-1",
+      "createdAt": "2026-09-03T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-4-2",
+      "createdAt": "2026-09-03T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        }
+      ],
+      "total": 308
+    },
+    {
+      "id": "ord-4-3",
+      "createdAt": "2026-09-03T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 2,
+          "price": 189
+        }
+      ],
+      "total": 378
+    },
+    {
+      "id": "ord-4-4",
+      "createdAt": "2026-09-03T08:38:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        },
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 1,
+          "price": 169
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-4-5",
+      "createdAt": "2026-09-03T09:45:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-3-0",
+      "createdAt": "2026-09-04T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-3-1",
+      "createdAt": "2026-09-04T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 2,
+          "price": 169
+        }
+      ],
+      "total": 338
+    },
+    {
+      "id": "ord-3-2",
+      "createdAt": "2026-09-04T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 1,
+          "price": 189
+        }
+      ],
+      "total": 348
+    },
+    {
+      "id": "ord-3-3",
+      "createdAt": "2026-09-04T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-2-0",
+      "createdAt": "2026-09-05T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 1,
+          "price": 169
+        },
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 1,
+          "price": 169
+        }
+      ],
+      "total": 338
+    },
+    {
+      "id": "ord-2-1",
+      "createdAt": "2026-09-05T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-2-2",
+      "createdAt": "2026-09-05T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 1,
+          "price": 169
+        },
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 328
+    },
+    {
+      "id": "ord-2-3",
+      "createdAt": "2026-09-05T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-2-4",
+      "createdAt": "2026-09-05T08:38:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        }
+      ],
+      "total": 308
+    },
+    {
+      "id": "ord-1-0",
+      "createdAt": "2026-09-06T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-1-1",
+      "createdAt": "2026-09-06T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 2,
+          "price": 169
+        }
+      ],
+      "total": 338
+    },
+    {
+      "id": "ord-1-2",
+      "createdAt": "2026-09-06T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 1,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-1-3",
+      "createdAt": "2026-09-06T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 2,
+          "price": 169
+        }
+      ],
+      "total": 338
+    },
+    {
+      "id": "ord-1-4",
+      "createdAt": "2026-09-06T08:38:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "caramel-macchiato",
+          "name": "Caramel Macchiato",
+          "qty": 1,
+          "price": 159
+        },
+        {
+          "productId": "panini",
+          "name": "Panini",
+          "qty": 1,
+          "price": 189
+        }
+      ],
+      "total": 348
+    },
+    {
+      "id": "ord-1-5",
+      "createdAt": "2026-09-06T09:45:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "strawberry-crumble",
+          "name": "Strawberry Crumble",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-0-0",
+      "createdAt": "2026-09-07T04:10:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "spanish-latte",
+          "name": "Spanish Latte",
+          "qty": 1,
+          "price": 149
+        },
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 1,
+          "price": 169
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-0-1",
+      "createdAt": "2026-09-07T05:17:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "seasalt-cream",
+          "name": "Sea Salt Cream",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    },
+    {
+      "id": "ord-0-2",
+      "createdAt": "2026-09-07T06:24:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "matcha-umami",
+          "name": "Matcha Umami",
+          "qty": 1,
+          "price": 169
+        },
+        {
+          "productId": "biscoff-latte",
+          "name": "Biscoff Latte",
+          "qty": 1,
+          "price": 169
+        }
+      ],
+      "total": 338
+    },
+    {
+      "id": "ord-0-3",
+      "createdAt": "2026-09-07T07:31:00.000Z",
+      "baristaName": "Sale In Charge",
+      "items": [
+        {
+          "productId": "cookie-crumble",
+          "name": "Cookie Crumble",
+          "qty": 2,
+          "price": 159
+        }
+      ],
+      "total": 318
+    }
+  ]
+}
