@@ -8,17 +8,20 @@ const ROLES = [
     id: "admin",
     label: "Admin",
     username: "admin",
-    note: "Sales analysis dashboard",
+    note: "Sales and staff",
   },
   {
     id: "barista",
     label: "Barista",
     username: "barista",
-    note: "Sale In Charge · POS only",
+    note: "POS only",
   },
 ] as const;
 
 const initial: LoginState = {};
+
+const field =
+  "w-full rounded-none border border-white/30 bg-transparent px-4 py-3 text-white outline-none focus:border-white";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(login, initial);
@@ -54,7 +57,7 @@ export function LoginForm() {
           name="username"
           defaultValue={selected.username}
           autoComplete="username"
-          className="w-full rounded-none border border-white/30 bg-transparent px-4 py-3 text-white outline-none focus:border-white"
+          className={field}
         />
       </label>
 
@@ -67,7 +70,7 @@ export function LoginForm() {
           type="password"
           defaultValue="commune"
           autoComplete="current-password"
-          className="w-full rounded-none border border-white/30 bg-transparent px-4 py-3 text-white outline-none focus:border-white"
+          className={field}
         />
       </label>
 
@@ -82,10 +85,6 @@ export function LoginForm() {
       >
         {pending ? "Signing in…" : "Enter commune"}
       </button>
-
-      <p className="text-center text-xs text-neutral-500">
-        Demo password for both roles: commune
-      </p>
     </form>
   );
 }

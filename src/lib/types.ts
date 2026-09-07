@@ -49,10 +49,20 @@ export type Promotion = {
   active: boolean;
 };
 
+export type StaffUser = {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: Role;
+  title: string;
+};
+
 export type StoreData = {
   pos: PosState;
   orders: Order[];
   menu: MenuItem[];
   categories: string[];
   promotions: Promotion[];
+  users: StaffUser[];
 };

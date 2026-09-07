@@ -7,7 +7,8 @@ import {
   encodeSession,
   homeForRole,
 } from "@/lib/auth";
-import { findUser, toSession } from "@/lib/users";
+import { getStore } from "@/lib/store";
+import { toSession } from "@/lib/users";
 
 export type LoginState = {
   error?: string;
@@ -24,7 +25,10 @@ export async function login(
     return { error: "Enter a username and password." };
   }
 
-  const user = findUser(username, password);
+  const store = await getStore();
+  const user = store.users.find(
+    (entry) => entry.username === username.toLowerCase() && entry.password === password,
+  );
   if (!user) {
     return { error: "Those credentials do not match a commune staff account." };
   }

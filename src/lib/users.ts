@@ -1,15 +1,8 @@
-import type { Role, Session } from "@/lib/types";
+import type { Role, Session, StaffUser } from "@/lib/types";
 
-type UserRecord = {
-  id: string;
-  username: string;
-  password: string;
-  name: string;
-  role: Role;
-  title: string;
-};
+export type PublicStaffUser = Omit<StaffUser, "password">;
 
-export const USERS: UserRecord[] = [
+export const DEFAULT_USERS: StaffUser[] = [
   {
     id: "admin-1",
     username: "admin",
@@ -28,20 +21,33 @@ export const USERS: UserRecord[] = [
   },
 ];
 
-export function findUser(
-  username: string,
-  password: string,
-): UserRecord | undefined {
-  return USERS.find(
-    (user) => user.username === username && user.password === password,
-  );
+export function staffUserId(username: string): string {
+  const slug = username
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug || "user"}-${Date.now().toString(36)}`;
 }
 
-export function toSession(user: UserRecord): Session {
+export function toSession(user: StaffUser): Session {
   return {
     userId: user.id,
     username: user.username,
     name: user.name,
     role: user.role,
   };
+}
+
+export function publicUser(user: StaffUser): PublicStaffUser {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    role: user.role,
+    title: user.title,
+  };
+}
+
+export function parseRole(value: string): Role {
+  return value === "admin" ? "admin" : "barista";
 }

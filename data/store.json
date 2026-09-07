@@ -687,5 +687,31 @@
       "value": 10,
       "active": true
     }
+  ],
+  "users": [
+    {
+      "id": "admin-1",
+      "username": "admin",
+      "password": "commune",
+      "name": "Admin",
+      "role": "admin",
+      "title": "Owner"
+    },
+    {
+      "id": "barista-1",
+      "username": "barista",
+      "password": "commune",
+      "name": "sreyka",
+      "role": "barista",
+      "title": "Sale In Charge"
+    },
+    {
+      "id": "wei-mtqzmjkm",
+      "name": "wei",
+      "username": "wei",
+      "title": "Barista",
+      "role": "barista",
+      "password": "commune"
+    }
   ]
 }

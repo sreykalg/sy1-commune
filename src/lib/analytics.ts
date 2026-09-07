@@ -44,22 +44,141 @@ export function lastNDays(orders: Order[], days: number, now = new Date()) {
 }
 
 export function topProducts(orders: Order[], limit = 5) {
-  const map = new Map<string, { name: string; qty: number; sales: number }>();
+  return bestSellers(productStats(orders), limit).map((item) => ({
+    name: item.name,
+    qty: item.qty,
+    sales: item.sales,
+  }));
+}
+
+export type ProductStat = {
+  id: string;
+  name: string;
+  category: string;
+  qty: number;
+  sales: number;
+};
+
+export function productStats(
+  orders: Order[],
+  menu: { id: string; name: string; category: string }[] = [],
+): ProductStat[] {
+  const map = new Map<string, ProductStat>();
+
+  for (const item of menu) {
+    map.set(item.id, {
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      qty: 0,
+      sales: 0,
+    });
+  }
 
   for (const order of liveOrders(orders)) {
-    for (const item of order.items) {
-      const current = map.get(item.productId) ?? {
-        name: item.name,
+    for (const line of order.items) {
+      const current = map.get(line.productId) ?? {
+        id: line.productId,
+        name: line.name,
+        category: "Other",
         qty: 0,
         sales: 0,
       };
-      current.qty += item.qty;
-      current.sales += item.qty * item.price;
-      map.set(item.productId, current);
+      current.qty += line.qty;
+      current.sales += line.qty * line.price;
+      current.name = line.name;
+      map.set(line.productId, current);
     }
   }
 
-  return [...map.values()]
-    .sort((a, b) => b.sales - a.sales)
+  return [...map.values()];
+}
+
+export function bestSellers(stats: ProductStat[], limit = 5): ProductStat[] {
+  return [...stats]
+    .sort((a, b) => b.qty - a.qty || b.sales - a.sales)
     .slice(0, limit);
+}
+
+export function lowSellers(stats: ProductStat[], limit = 5): ProductStat[] {
+  return [...stats]
+    .sort((a, b) => a.qty - b.qty || a.sales - b.sales)
+    .slice(0, limit);
+}
+
+export function unitsSold(stats: ProductStat[]): number {
+  return stats.reduce((sum, item) => sum + item.qty, 0);
+}
+
+export function categorySales(stats: ProductStat[]) {
+  const map = new Map<string, { name: string; qty: number; sales: number }>();
+  for (const item of stats) {
+    const current = map.get(item.category) ?? {
+      name: item.category,
+      qty: 0,
+      sales: 0,
+    };
+    current.qty += item.qty;
+    current.sales += item.sales;
+    map.set(item.category, current);
+  }
+  return [...map.values()].sort((a, b) => b.sales - a.sales);
+}
+
+export function salesByHour(orders: Order[], now = new Date(), days = 7) {
+  const start = startOfDay(now);
+  start.setDate(start.getDate() - (days - 1));
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: hour === 0 ? "12a" : hour < 12 ? `${hour}a` : hour === 12 ? "12p" : `${hour - 12}p`,
+    sales: 0,
+    orders: 0,
+  }));
+
+  for (const order of liveOrders(orders)) {
+    const time = new Date(order.createdAt);
+    if (time < start) continue;
+    const hour = time.getHours();
+    buckets[hour].sales += order.total;
+    buckets[hour].orders += 1;
+  }
+
+  return buckets;
+}
+
+export function cafeHours(buckets: ReturnType<typeof salesByHour>) {
+  return buckets.filter((slot) => slot.hour >= 11 && slot.hour <= 23);
+}
+
+export function changePercent(current: number, previous: number): number | null {
+  if (previous === 0 && current === 0) return 0;
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+export function totalDiscount(orders: Order[]): number {
+  return liveOrders(orders).reduce((sum, order) => sum + (order.discount ?? 0), 0);
+}
+
+export function promoStats(orders: Order[]) {
+  const map = new Map<string, { label: string; count: number; discount: number }>();
+  for (const order of liveOrders(orders)) {
+    if (!order.promoLabel || !order.discount) continue;
+    const current = map.get(order.promoLabel) ?? {
+      label: order.promoLabel,
+      count: 0,
+      discount: 0,
+    };
+    current.count += 1;
+    current.discount += order.discount;
+    map.set(order.promoLabel, current);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count);
+}
+
+export function busiestDay(days: ReturnType<typeof lastNDays>) {
+  return days.reduce(
+    (best, day) => (day.sales > best.sales ? day : best),
+    days[0],
+  );
 }

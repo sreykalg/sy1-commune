@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { MenuItem, Order, Promotion, StoreData } from "@/lib/types";
+import type { MenuItem, Order, Promotion, StaffUser, StoreData } from "@/lib/types";
 import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
 import { DEFAULT_PROMOS } from "@/lib/promos";
+import { DEFAULT_USERS } from "@/lib/users";
 
 const STORE_PATH = path.join(process.cwd(), "data", "store.json");
 
@@ -72,6 +73,7 @@ function emptyStore(): StoreData {
     menu: DEFAULT_MENU.map((item) => ({ ...item })),
     categories: [...MENU_CATEGORIES],
     promotions: DEFAULT_PROMOS.map((item) => ({ ...item })),
+    users: DEFAULT_USERS.map((item) => ({ ...item })),
   };
 }
 
@@ -114,6 +116,18 @@ function normalizeStore(store: StoreData): StoreData {
       value: Number(item.value) || 0,
     }));
   }
+  if (!Array.isArray(store.users) || store.users.length === 0) {
+    store.users = DEFAULT_USERS.map((item) => ({ ...item }));
+  } else {
+    store.users = store.users.map((item: StaffUser) => ({
+      ...item,
+      username: String(item.username ?? "").toLowerCase(),
+      name: item.name || item.username,
+      title: item.title || (item.role === "admin" ? "Owner" : "Barista"),
+      role: item.role === "admin" ? "admin" : "barista",
+      password: String(item.password ?? ""),
+    }));
+  }
   return store;
 }
 
@@ -126,8 +140,9 @@ async function readStore(): Promise<StoreData> {
       Array.isArray(parsed.categories) && parsed.categories.length > 0;
     const hadPromos =
       Array.isArray(parsed.promotions) && parsed.promotions.length > 0;
+    const hadUsers = Array.isArray(parsed.users) && parsed.users.length > 0;
     const store = normalizeStore(parsed);
-    if (!hadMenu || !hadCategories || !hadPromos) {
+    if (!hadMenu || !hadCategories || !hadPromos || !hadUsers) {
       await writeStore(store);
     }
     return store;
