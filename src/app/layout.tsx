@@ -34,10 +34,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: CAFE.name,
   description: `${CAFE.tagline} ${CAFE.street}, ${CAFE.city}. Open ${CAFE.hours} ${CAFE.hoursNote}.`,
-  icons: {
-    icon: "/images/logo.jpg",
-    apple: "/images/logo.jpg",
-  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
