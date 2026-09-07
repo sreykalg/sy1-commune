@@ -61,12 +61,15 @@ export function LandingPage({ session }: { session: Session | null }) {
           <p className="font-script text-2xl text-white/90 sm:text-4xl">
             have a seat, take a sip
           </p>
-          <h1 className="mt-4 max-w-5xl text-[1.85rem] font-extrabold leading-[0.95] tracking-[0.06em] text-white uppercase drop-shadow-[0_10px_30px_rgba(0,0,0,0.65)] sm:mt-5 sm:text-6xl sm:tracking-[0.12em] md:text-7xl">
+          <h1 className="font-display mt-3 max-w-5xl text-[2.7rem] leading-[0.9] tracking-[0.08em] text-white uppercase drop-shadow-[0_10px_30px_rgba(0,0,0,0.65)] sm:mt-5 sm:text-7xl sm:tracking-[0.12em] md:text-8xl">
             We commune,
             <br />
             over coffee
           </h1>
-          <p className="mt-4 text-[10px] tracking-[0.22em] text-white/70 uppercase sm:mt-6 sm:text-[11px] sm:tracking-[0.38em]">
+          <p className="mt-5 text-[11px] tracking-[0.22em] text-white/85 uppercase sm:mt-7 sm:text-sm sm:tracking-[0.28em]">
+            {CAFE.hours} · {CAFE.hoursNote}
+          </p>
+          <p className="mt-2 text-[10px] tracking-[0.22em] text-white/65 uppercase sm:text-[11px] sm:tracking-[0.38em]">
             Tetuan · Zamboanga City
           </p>
         </div>
@@ -250,8 +253,13 @@ export function LandingPage({ session }: { session: Session | null }) {
                   {CAFE.email}
                 </a>
               </p>
-              <div className="pt-3">
-                <SocialLinks />
+              <div className="pt-4">
+                <p className="text-[10px] tracking-[0.28em] text-neutral-500 uppercase">
+                  Follow
+                </p>
+                <div className="mt-3">
+                  <SocialLinks />
+                </div>
               </div>
             </div>
           </div>

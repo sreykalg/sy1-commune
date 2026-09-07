@@ -11,6 +11,7 @@
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
   --font-script: var(--font-great-vibes);
+  --font-display: var(--font-bebas);
 }
 
 html {

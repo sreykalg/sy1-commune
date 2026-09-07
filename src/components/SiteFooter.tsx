@@ -6,8 +6,8 @@ import { SocialLinks } from "@/components/SocialLinks";
 export function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-black px-5 py-12 sm:px-6 sm:py-16">
-      <div className="mx-auto grid max-w-6xl gap-10 sm:grid-cols-2 md:grid-cols-4 md:gap-12">
-        <div>
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-start lg:gap-16">
+        <div className="lg:w-52 lg:shrink-0">
           <Link href="/" className="inline-block">
             <Image
               src="/images/logo.jpg"
@@ -23,51 +23,59 @@ export function SiteFooter() {
           </p>
         </div>
 
-        <div>
-          <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
-            Visit
-          </p>
-          <a
-            href={CAFE.mapsHref}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 block text-sm leading-6 text-neutral-300 hover:text-white"
-          >
-            {CAFE.street}
-            <br />
-            {CAFE.city}
-          </a>
-        </div>
+        <div className="grid flex-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+          <div>
+            <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
+              Visit
+            </p>
+            <a
+              href={CAFE.mapsHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 block text-sm leading-6 text-neutral-300 hover:text-white"
+            >
+              {CAFE.street}
+              <br />
+              {CAFE.city}
+            </a>
+          </div>
 
-        <div>
-          <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
-            Hours
-          </p>
-          <p className="mt-4 text-sm leading-6 text-neutral-300">
-            {CAFE.hours}
-            <br />
-            {CAFE.hoursNote}
-          </p>
-        </div>
+          <div>
+            <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
+              Hours
+            </p>
+            <p className="mt-4 text-sm leading-6 text-neutral-300">
+              {CAFE.hours}
+              <br />
+              {CAFE.hoursNote}
+            </p>
+          </div>
 
-        <div>
-          <div className="flex items-center justify-between gap-4">
+          <div>
             <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
               Connect
             </p>
-            <SocialLinks />
+            <div className="mt-4 space-y-2 text-sm break-words text-neutral-300">
+              <p>
+                <a href={CAFE.phoneHref} className="hover:text-white">
+                  {CAFE.phone}
+                </a>
+              </p>
+              <p>
+                <a href={CAFE.emailHref} className="hover:text-white">
+                  {CAFE.email}
+                </a>
+              </p>
+            </div>
           </div>
-          <div className="mt-4 space-y-2 text-sm break-words text-neutral-300">
-            <p>
-              <a href={CAFE.phoneHref} className="hover:text-white">
-                {CAFE.phone}
-              </a>
+
+          <div>
+            <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
+              Follow
             </p>
-            <p>
-              <a href={CAFE.emailHref} className="hover:text-white">
-                {CAFE.email}
-              </a>
-            </p>
+            <div className="mt-4">
+              <SocialLinks />
+            </div>
           </div>
         </div>
       </div>

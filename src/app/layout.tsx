@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Great_Vibes, Inter, Playfair_Display } from "next/font/google";
+import { Bebas_Neue, Great_Vibes, Inter, Playfair_Display } from "next/font/google";
 import { CAFE } from "@/lib/cafe";
 import "./globals.css";
 
@@ -15,6 +15,12 @@ const playfair = Playfair_Display({
 
 const script = Great_Vibes({
   variable: "--font-great-vibes",
+  weight: "400",
+  subsets: ["latin"],
+});
+
+const display = Bebas_Neue({
+  variable: "--font-bebas",
   weight: "400",
   subsets: ["latin"],
 });
@@ -38,7 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${playfair.variable} ${script.variable} h-full antialiased`}
+      className={`${inter.variable} ${playfair.variable} ${script.variable} ${display.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-black font-sans text-white">{children}</body>
     </html>

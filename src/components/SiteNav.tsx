@@ -143,14 +143,9 @@ export function SiteNav({ session }: SiteNavProps) {
                 </Link>
               </nav>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
-                <div>
-                  <p className="text-[10px] tracking-[0.28em] text-neutral-500 uppercase">
-                    Connect
-                  </p>
-                  <p className="mt-1 text-[10px] tracking-[0.08em] text-neutral-500">
-                    {CAFE.hours} · {CAFE.hoursNote}
-                  </p>
-                </div>
+                <p className="text-[10px] tracking-[0.28em] text-neutral-500 uppercase">
+                  Follow
+                </p>
                 <SocialLinks />
               </div>
             </div>
