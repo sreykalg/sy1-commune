@@ -1,13 +1,14 @@
 import Image from "next/image";
 import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SocialLinks } from "@/components/SocialLinks";
 import { CAFE } from "@/lib/cafe";
 import { MENU, formatMoney } from "@/lib/menu";
 import type { Session } from "@/lib/types";
 
 function Eyebrow({ children }: { children: string }) {
   return (
-    <p className="text-[11px] tracking-[0.42em] text-neutral-500 uppercase">
+    <p className="px-2 text-[10px] tracking-[0.22em] text-neutral-500 uppercase sm:text-[11px] sm:tracking-[0.42em]">
       {children}
     </p>
   );
@@ -45,30 +46,35 @@ export function LandingPage({ session }: { session: Session | null }) {
     <div className="bg-black text-white">
       <section className="relative min-h-svh overflow-hidden">
         <Image
-          src="/images/hero-bar.jpg"
-          alt="commune cafe interior"
+          src="/images/hero-wide.jpg"
+          alt="commune cafe bar"
           fill
           priority
+          quality={95}
+          unoptimized
           sizes="100vw"
-          className="object-cover object-[center_42%]"
+          className="object-cover object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/5 to-black/50" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/70" />
         <SiteNav session={session} />
-        <div className="relative z-10 flex min-h-svh flex-col items-center justify-end px-6 pb-16 text-center sm:pb-20">
-          <p className="text-[11px] tracking-[0.45em] text-white/80 uppercase">
-            commune café
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-end px-5 pb-10 text-center sm:px-6 sm:pb-16">
+          <p className="font-script text-2xl text-white/90 sm:text-4xl">
+            have a seat, take a sip
           </p>
-          <h1 className="mt-4 max-w-4xl text-4xl font-extrabold leading-[0.95] tracking-[0.08em] text-white uppercase drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] sm:text-6xl md:text-7xl">
+          <h1 className="mt-4 max-w-5xl text-[1.85rem] font-extrabold leading-[0.95] tracking-[0.06em] text-white uppercase drop-shadow-[0_10px_30px_rgba(0,0,0,0.65)] sm:mt-5 sm:text-6xl sm:tracking-[0.12em] md:text-7xl">
             We commune,
             <br />
             over coffee
           </h1>
+          <p className="mt-4 text-[10px] tracking-[0.22em] text-white/70 uppercase sm:mt-6 sm:text-[11px] sm:tracking-[0.38em]">
+            Tetuan · Zamboanga City
+          </p>
         </div>
       </section>
 
-      <section className="border-t border-white/10 bg-[#0b0b0b] px-4 py-16 sm:px-6 sm:py-24">
-        <div className="mx-auto grid max-w-6xl items-stretch gap-4 md:grid-cols-12">
-          <article className="relative min-h-[420px] overflow-hidden bg-black md:col-span-7 md:min-h-[640px]">
+      <section className="border-t border-white/10 bg-[#0b0b0b] px-3 py-10 sm:px-6 sm:py-24">
+        <div className="mx-auto grid max-w-6xl items-stretch gap-3 sm:gap-4 md:grid-cols-12">
+          <article className="relative min-h-[280px] overflow-hidden bg-black sm:min-h-[420px] md:col-span-7 md:min-h-[640px]">
             <Image
               src="/images/open.jpg"
               alt={`${CAFE.name} open ${CAFE.hours}`}
@@ -77,11 +83,11 @@ export function LandingPage({ session }: { session: Session | null }) {
               className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-            <div className="absolute bottom-0 left-0 p-8 sm:p-10">
-              <p className="font-serif text-6xl italic tracking-tight sm:text-8xl">
+            <div className="absolute bottom-0 left-0 p-5 sm:p-10">
+              <p className="font-serif text-5xl italic tracking-tight sm:text-8xl">
                 OPEN!
               </p>
-              <p className="mt-3 text-sm tracking-[0.28em] text-white/80 uppercase">
+              <p className="mt-2 text-[10px] tracking-[0.12em] text-white/80 uppercase sm:mt-3 sm:text-sm sm:tracking-[0.28em]">
                 {CAFE.hours} · {CAFE.hoursNote}
               </p>
             </div>
@@ -89,58 +95,50 @@ export function LandingPage({ session }: { session: Session | null }) {
           <Photo
             src="/images/drinks.jpg"
             alt="Signature iced drinks at commune"
-            className="min-h-[360px] md:col-span-5 md:min-h-[640px]"
+            className="min-h-[240px] sm:min-h-[360px] md:col-span-5 md:min-h-[640px]"
             sizes="(max-width: 768px) 100vw, 42vw"
           />
         </div>
       </section>
 
-      <section className="px-4 py-20 sm:px-6 sm:py-28">
-        <div className="mx-auto mb-12 max-w-6xl text-center">
-          <p className="font-script text-4xl sm:text-5xl">have a seat, take a sip</p>
+      <section className="px-3 py-12 sm:px-6 sm:py-28">
+        <div className="mx-auto mb-8 max-w-6xl px-2 text-center sm:mb-12">
+          <p className="font-script text-3xl sm:text-5xl">have a seat, take a sip</p>
           <Eyebrow>{CAFE.tagline}</Eyebrow>
         </div>
-        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
           <Photo
             src="/images/cups.jpg"
             alt="Iced latte and matcha at commune"
-            className="min-h-[440px] md:min-h-[520px]"
+            className="min-h-[260px] sm:min-h-[440px] md:min-h-[520px]"
             sizes="(max-width: 768px) 100vw, 50vw"
           />
           <Photo
             src="/images/signatures.jpg"
             alt="Sea salt cream, Spanish latte, and brownie"
-            className="min-h-[440px] md:min-h-[520px]"
+            className="min-h-[260px] sm:min-h-[440px] md:min-h-[520px]"
             sizes="(max-width: 768px) 100vw, 50vw"
           />
           <Photo
             src="/images/matcha-umami.jpg"
             alt="New in the menu: Matcha Umami"
-            className="min-h-[520px]"
+            className="min-h-[300px] sm:min-h-[520px]"
             sizes="(max-width: 768px) 100vw, 50vw"
           />
           <Photo
             src="/images/carrier.jpg"
             alt="Have a seat, take a sip"
-            className="min-h-[520px]"
+            className="min-h-[300px] sm:min-h-[520px]"
             sizes="(max-width: 768px) 100vw, 50vw"
-          />
-        </div>
-        <div className="mx-auto mt-4 max-w-6xl">
-          <Photo
-            src="/images/spread.jpg"
-            alt="Come sip eat — drinks, panini, and fries"
-            className="min-h-[420px] sm:min-h-[580px]"
-            sizes="100vw"
           />
         </div>
       </section>
 
       <section
         id="menu"
-        className="border-y border-white/10 bg-[#111] px-4 py-20 sm:px-6 sm:py-28"
+        className="border-y border-white/10 bg-[#111] px-4 py-12 sm:px-6 sm:py-28"
       >
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-2 lg:gap-12">
           <div>
             <Eyebrow>The board</Eyebrow>
             <h2 className="mt-4 font-serif text-4xl italic sm:text-5xl">
@@ -153,7 +151,7 @@ export function LandingPage({ session }: { session: Session | null }) {
               {MENU.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-baseline justify-between gap-6 py-4"
+                  className="flex items-baseline justify-between gap-3 py-4 sm:gap-6"
                 >
                   <div>
                     <p className="font-medium tracking-wide">{item.name}</p>
@@ -171,18 +169,18 @@ export function LandingPage({ session }: { session: Session | null }) {
           <Photo
             src="/images/menu-carrier.jpg"
             alt="Biscoff latte, caramel macchiato, Spanish latte, sea salt cream"
-            className="min-h-[520px] lg:min-h-[680px]"
+            className="min-h-[280px] sm:min-h-[520px] lg:min-h-[680px]"
             sizes="(max-width: 1024px) 100vw, 50vw"
           />
         </div>
       </section>
 
-      <section id="about" className="px-4 py-20 sm:px-6 sm:py-28">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+      <section id="about" className="px-4 py-12 sm:px-6 sm:py-28">
+        <div className="mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-2 lg:gap-12">
           <Photo
             src="/images/storefront.jpg"
             alt="commune cafe storefront at night"
-            className="min-h-[480px] lg:min-h-[620px]"
+            className="min-h-[280px] sm:min-h-[480px] lg:min-h-[620px]"
             sizes="(max-width: 1024px) 100vw, 50vw"
           />
           <div className="max-w-lg lg:pl-6">
@@ -194,11 +192,11 @@ export function LandingPage({ session }: { session: Session | null }) {
               height={200}
               className="mt-8 h-20 w-20 object-cover"
             />
-            <h2 className="mt-6 text-4xl font-bold tracking-tight">{CAFE.name}</h2>
-            <p className="mt-3 text-[11px] tracking-[0.32em] text-neutral-500 uppercase">
+            <h2 className="mt-6 text-3xl font-bold tracking-tight sm:text-4xl">{CAFE.name}</h2>
+            <p className="mt-3 text-[10px] tracking-[0.18em] text-neutral-500 uppercase sm:text-[11px] sm:tracking-[0.32em]">
               {CAFE.tagline}
             </p>
-            <p className="mt-8 text-lg leading-8 text-neutral-300">
+            <p className="mt-8 text-base leading-7 text-neutral-300 sm:text-lg sm:leading-8">
               Every cup tells a story, and every sip brings us closer together. A
               quiet industrial house in Tetuan — matcha umami, sea salt cream,
               panini, and a table meant to be shared.
@@ -209,16 +207,16 @@ export function LandingPage({ session }: { session: Session | null }) {
 
       <section
         id="contact"
-        className="border-t border-white/10 bg-[#0b0b0b] px-4 py-20 sm:px-6 sm:py-28"
+        className="border-t border-white/10 bg-[#0b0b0b] px-3 py-12 sm:px-6 sm:py-28"
       >
-        <div className="mx-auto mb-12 max-w-6xl text-center">
+        <div className="mx-auto mb-8 max-w-6xl px-2 text-center sm:mb-12">
           <Eyebrow>Contact Us</Eyebrow>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-4xl">
             Where to find us?
           </h2>
         </div>
-        <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-12">
-          <div className="flex flex-col justify-between border border-white/10 bg-black/40 px-8 py-10 lg:col-span-5">
+        <div className="mx-auto grid max-w-6xl gap-3 sm:gap-4 lg:grid-cols-12">
+          <div className="flex flex-col justify-between border border-white/10 bg-black/40 px-5 py-8 sm:px-8 sm:py-10 lg:col-span-5">
             <div>
               <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
                 Visit
@@ -227,7 +225,7 @@ export function LandingPage({ session }: { session: Session | null }) {
                 href={CAFE.mapsHref}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-6 block text-xl leading-relaxed text-white transition hover:text-neutral-300"
+                className="mt-6 block text-lg leading-relaxed text-white transition hover:text-neutral-300 sm:text-xl"
               >
                 {CAFE.street}
                 <span className="mt-2 block text-base text-neutral-400">
@@ -239,7 +237,7 @@ export function LandingPage({ session }: { session: Session | null }) {
               </a>
             </div>
             <div className="mt-12 space-y-3 text-sm text-neutral-300">
-              <p className="tracking-[0.18em] uppercase">
+              <p className="text-[10px] tracking-[0.12em] uppercase sm:tracking-[0.18em]">
                 {CAFE.hours} · {CAFE.hoursNote}
               </p>
               <p>
@@ -252,28 +250,21 @@ export function LandingPage({ session }: { session: Session | null }) {
                   {CAFE.email}
                 </a>
               </p>
-              <p>
-                <a
-                  href={CAFE.facebookHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-white"
-                >
-                  Facebook · {CAFE.facebookLabel}
-                </a>
-              </p>
+              <div className="pt-3">
+                <SocialLinks />
+              </div>
             </div>
           </div>
           <Photo
             src="/images/open-now.jpg"
             alt="We're open now at commune"
-            className="min-h-[360px] lg:col-span-4 lg:min-h-[560px]"
+            className="min-h-[220px] sm:min-h-[360px] lg:col-span-4 lg:min-h-[560px]"
             sizes="(max-width: 1024px) 100vw, 33vw"
           />
           <Photo
             src="/images/collage.jpg"
             alt="commune cafe moments"
-            className="min-h-[360px] lg:col-span-3 lg:min-h-[560px]"
+            className="min-h-[220px] sm:min-h-[360px] lg:col-span-3 lg:min-h-[560px]"
             sizes="(max-width: 1024px) 100vw, 25vw"
           />
         </div>

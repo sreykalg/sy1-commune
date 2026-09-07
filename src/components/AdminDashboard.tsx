@@ -15,7 +15,7 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs tracking-[0.25em] text-neutral-400 uppercase">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-semibold">{value}</p>
+            <p className="mt-3 text-2xl font-semibold sm:text-3xl">{value}</p>
     </div>
   );
 }
@@ -32,13 +32,13 @@ export async function AdminDashboard() {
     .slice(0, 10);
 
   return (
-    <div className="space-y-10 px-6 py-8">
+    <div className="space-y-8 px-4 py-6 sm:space-y-10 sm:px-6 sm:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs tracking-[0.3em] text-neutral-400 uppercase">
             Sales analysis
           </p>
-          <h1 className="mt-2 text-3xl font-semibold">Track every ticket</h1>
+          <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">Track every ticket</h1>
         </div>
         <p
           className={`rounded-full px-4 py-2 text-sm ${

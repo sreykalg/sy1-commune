@@ -40,13 +40,13 @@ export function PosClient({ pos, recentOrders }: PosClientProps) {
   const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   return (
-    <div className="px-6 py-8">
+    <div className="px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs tracking-[0.3em] text-neutral-400 uppercase">
             Point of sale
           </p>
-          <p className="mt-2 text-3xl font-semibold">
+          <p className="mt-2 text-2xl font-semibold sm:text-3xl">
             {pos.isOpen ? "POS open" : "POS closed"}
           </p>
           {pos.isOpen && pos.openedBy ? (
@@ -87,8 +87,8 @@ export function PosClient({ pos, recentOrders }: PosClientProps) {
       </div>
 
       {!pos.isOpen ? (
-        <div className="border border-white/10 px-8 py-20 text-center">
-          <p className="font-serif text-5xl italic">Closed</p>
+        <div className="border border-white/10 px-5 py-14 text-center sm:px-8 sm:py-20">
+          <p className="font-serif text-4xl italic sm:text-5xl">Closed</p>
           <p className="mt-4 text-neutral-400">
             Sale In Charge must open the POS before any ticket can be sold.
           </p>

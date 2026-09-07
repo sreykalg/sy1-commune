@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Great_Vibes, Inter, Playfair_Display } from "next/font/google";
 import { CAFE } from "@/lib/cafe";
 import "./globals.css";
@@ -18,6 +18,12 @@ const script = Great_Vibes({
   weight: "400",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#000000",
+};
 
 export const metadata: Metadata = {
   title: CAFE.name,

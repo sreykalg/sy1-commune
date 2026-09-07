@@ -12,6 +12,11 @@ export const CAFE = {
   emailHref: "mailto:cadilmona@gmail.com",
   mapsHref:
     "https://maps.google.com/?q=Crispin+Atilano+St+Tetuan+Zamboanga+City",
-  facebookHref: "https://www.facebook.com/p/commune-caf%C3%A9-61582118725483/",
-  facebookLabel: "commune café",
+  socials: [
+    {
+      id: "facebook" as const,
+      label: "Facebook",
+      href: "https://www.facebook.com/p/commune-caf%C3%A9-61582118725483/",
+    },
+  ],
 } as const;

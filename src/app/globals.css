@@ -17,6 +17,10 @@ html {
   scroll-behavior: smooth;
 }
 
+body {
+  overflow-x: hidden;
+}
+
 nav::-webkit-scrollbar {
   display: none;
 }

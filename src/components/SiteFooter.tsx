@@ -1,23 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
 import { CAFE } from "@/lib/cafe";
+import { SocialLinks } from "@/components/SocialLinks";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-white/10 bg-black px-6 py-16">
-      <div className="mx-auto grid max-w-6xl gap-12 md:grid-cols-4">
-        <div className="md:col-span-1">
+    <footer className="border-t border-white/10 bg-black px-5 py-12 sm:px-6 sm:py-16">
+      <div className="mx-auto grid max-w-6xl gap-10 sm:grid-cols-2 md:grid-cols-4 md:gap-12">
+        <div>
           <Link href="/" className="inline-block">
             <Image
               src="/images/logo.jpg"
               alt={CAFE.name}
               width={160}
               height={160}
-              className="h-16 w-16 object-cover"
+              className="h-14 w-14 object-cover sm:h-16 sm:w-16"
             />
           </Link>
           <p className="mt-5 text-xl font-bold tracking-tight">{CAFE.name}</p>
-          <p className="mt-2 text-[10px] tracking-[0.28em] text-neutral-500 uppercase">
+          <p className="mt-4 text-[10px] tracking-[0.18em] text-neutral-500 uppercase sm:tracking-[0.28em]">
             {CAFE.tagline}
           </p>
         </div>
@@ -50,10 +51,13 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
-            Connect
-          </p>
-          <div className="mt-4 space-y-2 text-sm text-neutral-300">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[11px] tracking-[0.28em] text-neutral-500 uppercase">
+              Connect
+            </p>
+            <SocialLinks />
+          </div>
+          <div className="mt-4 space-y-2 text-sm break-words text-neutral-300">
             <p>
               <a href={CAFE.phoneHref} className="hover:text-white">
                 {CAFE.phone}
@@ -64,21 +68,11 @@ export function SiteFooter() {
                 {CAFE.email}
               </a>
             </p>
-            <p>
-              <a
-                href={CAFE.facebookHref}
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-white"
-              >
-                Facebook
-              </a>
-            </p>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto mt-14 flex max-w-6xl flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 text-[11px] tracking-[0.18em] text-neutral-600 uppercase">
+      <div className="mx-auto mt-10 flex max-w-6xl flex-col gap-3 border-t border-white/10 pt-6 text-[10px] tracking-[0.14em] text-neutral-600 uppercase sm:mt-14 sm:flex-row sm:items-center sm:justify-between sm:tracking-[0.18em]">
         <p>© {new Date().getFullYear()} commune. Tetuan, Zamboanga City</p>
         <p>have a seat, take a sip</p>
       </div>

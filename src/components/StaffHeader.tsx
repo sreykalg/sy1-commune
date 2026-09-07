@@ -10,7 +10,7 @@ type StaffHeaderProps = {
 
 export function StaffHeader({ session, title, subtitle }: StaffHeaderProps) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-5">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
       <div>
         <BrandLogo size="sm" align="start" />
         <p className="mt-1 text-xs tracking-[0.25em] text-neutral-400 uppercase">
