@@ -113,11 +113,12 @@ function normalizeStore(store: StoreData): StoreData {
       image: item.image || "/images/drinks.jpg",
     }));
   }
-  store.categories = uniqueCategories([
-    ...(store.categories ?? []),
-    ...MENU_CATEGORIES,
-    ...store.menu.map((item) => item.category),
-  ]);
+  const fromMenu = store.menu.map((item) => item.category);
+  if (!Array.isArray(store.categories) || store.categories.length === 0) {
+    store.categories = uniqueCategories([...MENU_CATEGORIES, ...fromMenu]);
+  } else {
+    store.categories = uniqueCategories([...store.categories, ...fromMenu]);
+  }
   if (!Array.isArray(store.promotions) || store.promotions.length === 0) {
     store.promotions = DEFAULT_PROMOS.map((item) => ({ ...item }));
   } else {

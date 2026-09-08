@@ -713,14 +713,6 @@
       "available": true
     },
     {
-      "id": "strawberry-crumble",
-      "name": "Strawberry Crumble",
-      "price": 159,
-      "category": "Signature",
-      "image": "/images/cups.jpg",
-      "available": true
-    },
-    {
       "id": "matcha-umami",
       "name": "Matcha Umami",
       "price": 169,
@@ -742,9 +734,7 @@
     "Signature",
     "Tea",
     "Dessert",
-    "Soda",
-    "Non Coffee",
-    "Food"
+    "Soda"
   ],
   "promotions": [
     {

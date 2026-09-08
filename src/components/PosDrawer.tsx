@@ -514,7 +514,13 @@ function CategoryPanel({
                   type="button"
                   aria-label={`Delete ${category}`}
                   disabled={pending}
-                  onClick={() =>
+                  onClick={() => {
+                    if (count > 0) {
+                      onNotice(
+                        `Move or delete the ${count} ${count === 1 ? "drink" : "drinks"} in ${category} first.`,
+                      );
+                      return;
+                    }
                     startTransition(async () => {
                       const result = await deleteMenuCategory(category);
                       if (result.error) {
@@ -522,8 +528,8 @@ function CategoryPanel({
                         return;
                       }
                       onNotice("Category deleted.");
-                    })
-                  }
+                    });
+                  }}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-red-600 hover:bg-red-50 disabled:opacity-40"
                 >
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor">
