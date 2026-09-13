@@ -515,6 +515,25 @@ export async function requestVoidApproval(
   return { ok: true, requestId };
 }
 
+export async function deleteVoidRequest(requestId: string) {
+  await requireAdmin();
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    const request = store.voidRequests.find((entry) => entry.id === requestId);
+    if (!request) {
+      error = "Void request not found.";
+      return;
+    }
+    store.voidRequests = store.voidRequests.filter((entry) => entry.id !== requestId);
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 export async function approveVoidRequest(requestId: string) {
   const session = await requireAdmin();
   let error: string | undefined;
