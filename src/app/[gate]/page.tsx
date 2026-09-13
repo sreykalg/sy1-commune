@@ -4,6 +4,8 @@ import { getSession, homeForRole } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 import { roleForLoginGate } from "@/lib/staff-gates";
 
+export const dynamic = "force-dynamic";
+
 export default async function GatePage({ params }: PageProps<"/[gate]">) {
   const { gate } = await params;
   const store = await getStore();
