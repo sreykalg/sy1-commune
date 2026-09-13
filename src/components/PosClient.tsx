@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/actions/auth";
 import { punchBaristaShift } from "@/actions/users";
@@ -8,6 +8,7 @@ import {
   beginPrintJob,
   createOrder,
   finishPrintJob,
+  getVoidRequestStatus,
   openPos,
   queueReprintJobs,
   requestVoidApproval,
@@ -189,11 +190,16 @@ export function PosClient({
     : [];
   const appliedPromoId = PROMOTIONS_ENABLED ? promoId : null;
   const availableOrders = useMemo(() => {
-    const byId = new Map(orders.map((order) => [order.id, order]));
-    if (lastOrder) byId.set(lastOrder.id, lastOrder);
-    return [...byId.values()]
-      .filter((order) => !order.voided)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const byId = new Map(
+      orders.filter((order) => !order.voided).map((order) => [order.id, order]),
+    );
+    const lastOrderVoided = Boolean(
+      lastOrder && orders.some((order) => order.id === lastOrder.id && order.voided),
+    );
+    if (lastOrder && !lastOrder.voided && !lastOrderVoided) {
+      byId.set(lastOrder.id, lastOrder);
+    }
+    return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [lastOrder, orders]);
   const knownPrintJobs = useMemo(() => {
     const byId = new Map(printJobs.map((job) => [job.id, job]));
@@ -355,22 +361,31 @@ export function PosClient({
     pos.isOpen &&
     cart.length > 0 &&
     (!isCash || paid >= total);
+  const appliedVoidRequestId = useRef<string | null>(null);
+  const lastOrderIdRef = useRef(lastOrderId);
+  lastOrderIdRef.current = lastOrderId;
+  const lastOrderRef = useRef(lastOrder);
+  lastOrderRef.current = lastOrder;
 
-  useEffect(() => {
-    if (!activeVoidRequestId || activeVoidRequest?.status === "approved") return;
-    const refreshTimer = window.setInterval(() => router.refresh(), 3000);
-    return () => window.clearInterval(refreshTimer);
-  }, [activeVoidRequest?.status, activeVoidRequestId, router]);
-
-  useEffect(() => {
-    if (!activeVoidRequestId || activeVoidRequest?.status !== "approved") return;
-    if (activeVoidRequest.orderId) {
-      if (lastOrderId === activeVoidRequest.orderId) {
-        setLastOrderId(null);
-        setLastTicket(null);
-        setLastOrder(null);
-      }
-    } else {
+  function applyApprovedVoid(
+    requestId: string,
+    request: {
+      orderId?: string | null;
+      processedOrderId?: string | null;
+    },
+  ) {
+    if (appliedVoidRequestId.current === requestId) return;
+    appliedVoidRequestId.current = requestId;
+    const voidedId = request.orderId ?? request.processedOrderId ?? null;
+    if (
+      voidedId &&
+      (lastOrderIdRef.current === voidedId || lastOrderRef.current?.id === voidedId)
+    ) {
+      setLastOrderId(null);
+      setLastTicket(null);
+      setLastOrder(null);
+    }
+    if (!request.orderId) {
       setCart([]);
       setTendered("");
       setPaymentMethod("cash");
@@ -381,7 +396,43 @@ export function PosClient({
     setVoidTargetId(null);
     setVoidReason("");
     setMessage("Admin approved the void. The checkout has been voided.");
-  }, [activeVoidRequest, activeVoidRequestId, lastOrderId]);
+    router.refresh();
+  }
+
+  useEffect(() => {
+    if (!lastOrderId) return;
+    const serverOrder = orders.find((order) => order.id === lastOrderId);
+    if (!serverOrder?.voided) return;
+    setLastOrderId(null);
+    setLastTicket(null);
+    setLastOrder(null);
+    if (printOrderId === lastOrderId) setPrintOrderId(null);
+  }, [lastOrderId, orders, printOrderId]);
+
+  useEffect(() => {
+    if (!activeVoidRequestId) return;
+    const requestId: string = activeVoidRequestId;
+    if (activeVoidRequest?.status === "approved") {
+      applyApprovedVoid(requestId, activeVoidRequest);
+      return;
+    }
+
+    let cancelled = false;
+    async function checkVoidRequest() {
+      const result = await getVoidRequestStatus(requestId);
+      if (cancelled || !result.found || result.status !== "approved") return;
+      applyApprovedVoid(requestId, result);
+    }
+
+    void checkVoidRequest();
+    const timer = window.setInterval(() => {
+      void checkVoidRequest();
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeVoidRequest, activeVoidRequestId, router]);
 
   function selectedAddonsFor(item: MenuItem, selected: Record<string, number>): OrderAddon[] {
     return resolveOrderAddons(

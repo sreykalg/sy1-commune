@@ -519,6 +519,21 @@ export async function requestVoidApproval(
   return { ok: true, requestId };
 }
 
+export async function getVoidRequestStatus(requestId: string) {
+  const session = await requirePos();
+  const store = await getStore();
+  const request = store.voidRequests.find((entry) => entry.id === requestId);
+  if (!request || request.requestedById !== session.userId) {
+    return { found: false as const };
+  }
+  return {
+    found: true as const,
+    status: request.status,
+    orderId: request.orderId ?? null,
+    processedOrderId: request.processedOrderId ?? null,
+  };
+}
+
 export async function deleteVoidRequest(requestId: string) {
   await requireAdmin();
   let error: string | undefined;
