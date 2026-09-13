@@ -14,6 +14,7 @@ import {
 } from "@/actions/users";
 import type { PublicStaffUser } from "@/lib/users";
 import { phDateString, phDateTimeInputValue, phDateTimeLabel } from "@/lib/datetime";
+import { pairLoginSessions, type StaffSession } from "@/lib/staff-sessions";
 import type { LoginActivity, OffRequest, Session } from "@/lib/types";
 import type { LoginGates } from "@/lib/staff-gates";
 
@@ -30,67 +31,6 @@ type UserManagerProps = {
 
 type SubTab = "staff" | "inout" | "off" | "gates";
 type StaffRole = "Admin" | "Barista" | "Manager" | "Cashier";
-
-type StaffSession = {
-  id: string;
-  userId: string;
-  username: string;
-  name: string;
-  loginId: string | null;
-  logoutId: string | null;
-  loginAt: string | null;
-  logoutAt: string | null;
-};
-
-function pairLoginSessions(records: LoginActivity[]): StaffSession[] {
-  const chronological = [...records].sort(
-    (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id),
-  );
-  const openByUser = new Map<string, StaffSession[]>();
-  const sessions: StaffSession[] = [];
-
-  for (const record of chronological) {
-    const open = openByUser.get(record.userId) ?? [];
-    if (record.type === "login") {
-      const session: StaffSession = {
-        id: record.id,
-        userId: record.userId,
-        username: record.username,
-        name: record.name,
-        loginId: record.id,
-        logoutId: null,
-        loginAt: record.at,
-        logoutAt: null,
-      };
-      sessions.push(session);
-      open.push(session);
-      openByUser.set(record.userId, open);
-    } else {
-      const unpaired = open.pop();
-      if (unpaired) {
-        unpaired.logoutId = record.id;
-        unpaired.logoutAt = record.at;
-      } else {
-        sessions.push({
-          id: record.id,
-          userId: record.userId,
-          username: record.username,
-          name: record.name,
-          loginId: null,
-          logoutId: record.id,
-          loginAt: null,
-          logoutAt: record.at,
-        });
-      }
-    }
-  }
-
-  return sessions.sort((a, b) => {
-    const aTime = a.loginAt ?? a.logoutAt ?? "";
-    const bTime = b.loginAt ?? b.logoutAt ?? "";
-    return bTime.localeCompare(aTime);
-  });
-}
 
 export function UserManager({ users, session, loginActivity, offRequests, loginGates }: UserManagerProps) {
   const [tab, setTab] = useState<SubTab>("staff");
@@ -208,22 +148,13 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                 onSubmit={(event) => {
                   event.preventDefault();
                   startTransition(async () => {
-                    const isBarista = role === "Barista";
-                    const payload = isBarista
-                      ? {
-                          name,
-                          username: editingId === "new" ? "" : username,
-                          title: "Barista",
-                          role: "barista",
-                          password: "",
-                        }
-                      : {
-                          name,
-                          username,
-                          title: title || role,
-                          role: role.toLowerCase(),
-                          password,
-                        };
+                    const payload = {
+                      name,
+                      username,
+                      title: role === "Barista" ? "Barista" : title || role,
+                      role: role.toLowerCase(),
+                      password,
+                    };
                     const result =
                       editingId === "new"
                         ? await createStaffUser(payload)
@@ -252,36 +183,35 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                   </button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className={`text-xs font-medium text-neutral-600 ${role === "Barista" ? "sm:col-span-2" : ""}`}>
+                  <label className="text-xs font-medium text-neutral-600">
                     <span className="mb-1.5 block">Name</span>
                     <input value={name} onChange={(event) => setName(event.target.value)} className={field} required />
                   </label>
-                  {role === "Barista" ? (
-                    <p className="sm:col-span-2 text-xs text-neutral-500">
-                      Baristas are name-only. They cannot log in.
-                    </p>
+                  <label className="text-xs font-medium text-neutral-600">
+                    <span className="mb-1.5 block">Username</span>
+                    <input value={username} onChange={(event) => setUsername(event.target.value)} className={field} required />
+                  </label>
+                  {role !== "Barista" ? (
+                    <label className="text-xs font-medium text-neutral-600">
+                      <span className="mb-1.5 block">Title</span>
+                      <input value={title} onChange={(event) => setTitle(event.target.value)} className={field} />
+                    </label>
                   ) : (
-                    <>
-                      <label className="text-xs font-medium text-neutral-600">
-                        <span className="mb-1.5 block">Username</span>
-                        <input value={username} onChange={(event) => setUsername(event.target.value)} className={field} required />
-                      </label>
-                      <label className="text-xs font-medium text-neutral-600">
-                        <span className="mb-1.5 block">Title</span>
-                        <input value={title} onChange={(event) => setTitle(event.target.value)} className={field} />
-                      </label>
-                      <label className="text-xs font-medium text-neutral-600">
-                        <span className="mb-1.5 block">Password</span>
-                        <input
-                          type="password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          className={field}
-                          required={editingId === "new"}
-                        />
-                      </label>
-                    </>
+                    <p className="sm:col-span-2 text-xs text-neutral-500">
+                      Baristas use this username and password to clock in and out on POS.
+                    </p>
                   )}
+                  <label className="text-xs font-medium text-neutral-600">
+                    <span className="mb-1.5 block">Password</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className={field}
+                      required={editingId === "new"}
+                      placeholder={editingId === "new" ? "" : "Leave blank to keep current"}
+                    />
+                  </label>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {(["Admin", "Manager", "Cashier", "Barista"] as const).map((id) => (
@@ -320,7 +250,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                       ) : null}
                     </div>
                     <p className="mt-0.5 text-xs text-neutral-400">
-                      {user.role === "barista" ? "Barista" : `${user.username} · ${user.title || user.role}`}
+                      {`${user.username} · ${user.title || user.role}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">

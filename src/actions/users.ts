@@ -10,13 +10,15 @@ import {
 } from "@/lib/auth";
 import { updateStore } from "@/lib/store";
 import { phDateString, phIsoFromDateTimeInput } from "@/lib/datetime";
+import { openBaristaShifts } from "@/lib/staff-sessions";
 import {
+  canUsePos,
   parseRole,
   staffUserId,
   toSession,
 } from "@/lib/users";
 import { sanitizeLoginGate } from "@/lib/staff-gates";
-import type { OffRequest, Role, StaffUser } from "@/lib/types";
+import type { OffRequest, Role, StaffUser, StoreData } from "@/lib/types";
 
 async function requireAdmin() {
   const session = await getSession();
@@ -31,6 +33,28 @@ function refresh() {
   revalidatePath("/pos");
 }
 
+async function requirePosSession() {
+  const session = await getSession();
+  if (!session || !canUsePos(session.role)) {
+    throw new Error("Only cashier or manager can punch barista shifts.");
+  }
+  return session;
+}
+
+function appendPunch(store: StoreData, user: StaffUser, type: "login" | "logout") {
+  if (!Array.isArray(store.loginActivity)) store.loginActivity = [];
+  store.loginActivity.unshift({
+    id: `auth-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    userId: user.id,
+    username: user.username,
+    name: user.name,
+    role: user.role,
+    type,
+    at: new Date().toISOString(),
+  });
+  if (store.loginActivity.length > 300) store.loginActivity.length = 300;
+}
+
 function parseStaff(input: {
   name: string;
   username: string;
@@ -43,27 +67,10 @@ function parseStaff(input: {
   const role = parseRole(input.role);
   if (!name) return { error: "Enter a display name." };
 
-  if (role === "barista") {
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "barista";
-    const username = (
-      input.username.trim() || `${slug}-${Date.now().toString(36)}`
-    )
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "")
-      .slice(0, 32);
-    if (!username || username.length < 2) {
-      return { error: "Enter a display name." };
-    }
-    return {
-      name,
-      username,
-      title: "Barista",
-      role,
-      password: input.requirePassword ? "" : undefined,
-    };
-  }
-
-  const title = input.title.trim() || (role === "admin" ? "Owner" : "Staff");
+  const title =
+    role === "barista"
+      ? "Barista"
+      : input.title.trim() || (role === "admin" ? "Owner" : "Staff");
   const password = input.password;
   const username = (
     input.username.trim() ||
@@ -100,7 +107,7 @@ export async function createStaffUser(input: {
   password: string;
 }) {
   await requireAdmin();
-  const parsed = parseStaff({ ...input, requirePassword: parseRole(input.role) !== "barista" });
+  const parsed = parseStaff({ ...input, requirePassword: true });
   if ("error" in parsed) return parsed;
 
   let error: string | undefined;
@@ -168,9 +175,7 @@ export async function updateStaffUser(input: {
     user.username = parsed.username;
     user.title = parsed.title;
     user.role = parsed.role;
-    if (parsed.role === "barista") {
-      user.password = "";
-    } else if (parsed.password) {
+    if (parsed.password) {
       user.password = parsed.password;
     }
     nextUser = { ...user };
@@ -221,21 +226,67 @@ export async function punchStaff(userId: string, type: "login" | "logout") {
       error = "Pick a staff member.";
       return;
     }
-    if (!Array.isArray(store.loginActivity)) store.loginActivity = [];
-    store.loginActivity.unshift({
-      id: `auth-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      userId: user.id,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      type,
-      at: new Date().toISOString(),
-    });
-    if (store.loginActivity.length > 300) store.loginActivity.length = 300;
+    appendPunch(store, user, type);
   });
   if (error) return { error };
   refresh();
   return { ok: true };
+}
+
+export async function punchBaristaShift(input: {
+  type: "login" | "logout";
+  username?: string;
+  password?: string;
+  userId?: string;
+}) {
+  await requirePosSession();
+
+  let error: string | undefined;
+  let punchedName: string | undefined;
+  await updateStore((store) => {
+    const openShifts = openBaristaShifts(store.loginActivity ?? []);
+
+    if (input.type === "login") {
+      const username = String(input.username ?? "").trim().toLowerCase();
+      const password = String(input.password ?? "");
+      const user = store.users.find(
+        (entry) => entry.role === "barista" && entry.username === username && entry.password === password,
+      );
+      if (!user) {
+        error = "Barista username or password is incorrect.";
+        return;
+      }
+      if (!user.password) {
+        error = "This barista does not have a password yet. Ask admin to set one.";
+        return;
+      }
+      if (openShifts.some((shift) => shift.userId === user.id)) {
+        error = `${user.name} is already clocked in.`;
+        return;
+      }
+      appendPunch(store, user, "login");
+      punchedName = user.name;
+      return;
+    }
+
+    const userId = String(input.userId ?? "").trim();
+    const open = openShifts.find((shift) => shift.userId === userId) ?? (userId ? null : openShifts[0]);
+    if (!open) {
+      error = "That barista is not clocked in.";
+      return;
+    }
+    const user = store.users.find((entry) => entry.id === open.userId);
+    if (!user) {
+      error = "Barista account not found.";
+      return;
+    }
+    appendPunch(store, user, "logout");
+    punchedName = user.name;
+  });
+
+  if (error) return { error };
+  refresh();
+  return { ok: true as const, name: punchedName ?? "" };
 }
 
 export async function updateStaffSessionTimes(input: {

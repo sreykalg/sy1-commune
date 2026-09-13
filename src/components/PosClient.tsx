@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { logout } from "@/actions/auth";
+import { punchBaristaShift } from "@/actions/users";
 import { createOrder, openPos, requestVoidApproval, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { formatMoney } from "@/lib/menu";
@@ -26,6 +28,7 @@ type PosClientProps = {
   categories: string[];
   promotions: Promotion[];
   orders: Order[];
+  clockedInBaristas: { id: string; name: string; username: string }[];
 };
 
 const CASH_PRESETS = [500, 1000, 2000];
@@ -86,6 +89,7 @@ export function PosClient({
   categories,
   promotions,
   orders,
+  clockedInBaristas,
 }: PosClientProps) {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [query, setQuery] = useState("");
@@ -105,7 +109,12 @@ export function PosClient({
   const [lastTicket, setLastTicket] = useState<ReceiptTicket | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [baristaModalOpen, setBaristaModalOpen] = useState(false);
+  const [baristaUsername, setBaristaUsername] = useState("");
+  const [baristaPassword, setBaristaPassword] = useState("");
+  const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
   const printer = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
   const activePromos = promotions.filter((item) => item.active);
@@ -406,6 +415,27 @@ export function PosClient({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={pending}
+              onClick={() => {
+                setBaristaUsername("");
+                setBaristaPassword("");
+                setBaristaNotice(null);
+                setBaristaModalOpen(true);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:opacity-50 ${
+                clockedInBaristas.length > 0
+                  ? "bg-white text-black hover:bg-neutral-200"
+                  : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              }`}
+            >
+              {clockedInBaristas.length === 0
+                ? "Barista in"
+                : clockedInBaristas.length === 1
+                  ? `In · ${clockedInBaristas[0].name}`
+                  : `${clockedInBaristas.length} baristas in`}
+            </button>
+            <button
+              type="button"
               disabled={pending || !printer.supported}
               onClick={() =>
                 startTransition(async () => {
@@ -444,6 +474,119 @@ export function PosClient({
             </button>
           </div>
         </header>
+
+        {baristaModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="relative flex w-full max-w-md flex-col rounded-3xl bg-white p-6 shadow-2xl">
+              <button
+                type="button"
+                aria-label="Close barista login"
+                onClick={() => setBaristaModalOpen(false)}
+                className="absolute top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black transition"
+              >
+                ×
+              </button>
+              <h2 className="text-xl font-semibold tracking-tight">Baristas</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Each barista clocks in with their own username and password. The same person cannot clock in twice.
+              </p>
+
+              {clockedInBaristas.length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">On shift</p>
+                  {clockedInBaristas.map((barista) => (
+                    <div
+                      key={barista.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{barista.name}</p>
+                        <p className="truncate text-xs text-neutral-400">{barista.username}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const result = await punchBaristaShift({ type: "logout", userId: barista.id });
+                            if (result && "error" in result && result.error) {
+                              setBaristaNotice(result.error);
+                              return;
+                            }
+                            setBaristaNotice(null);
+                            setMessage(`${barista.name} clocked out.`);
+                            router.refresh();
+                          })
+                        }
+                        className="shrink-0 rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:border-black disabled:opacity-40"
+                      >
+                        Out
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm text-neutral-500">No barista is on shift yet.</p>
+              )}
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  startTransition(async () => {
+                    const result = await punchBaristaShift({
+                      type: "login",
+                      username: baristaUsername,
+                      password: baristaPassword,
+                    });
+                    if (result && "error" in result && result.error) {
+                      setBaristaNotice(result.error);
+                      return;
+                    }
+                    setBaristaUsername("");
+                    setBaristaPassword("");
+                    setBaristaNotice(null);
+                    setMessage(`${"name" in result ? result.name : "Barista"} clocked in.`);
+                    router.refresh();
+                  });
+                }}
+                className="mt-5 border-t border-neutral-100 pt-5"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  {clockedInBaristas.length > 0 ? "Clock in another" : "Clock in"}
+                </p>
+                <label className="mt-3 block text-xs font-medium text-neutral-600">
+                  <span className="mb-1.5 block">Username</span>
+                  <input
+                    value={baristaUsername}
+                    onChange={(event) => setBaristaUsername(event.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-sm outline-none focus:border-black"
+                    autoComplete="username"
+                    required
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-medium text-neutral-600">
+                  <span className="mb-1.5 block">Password</span>
+                  <input
+                    type="password"
+                    value={baristaPassword}
+                    onChange={(event) => setBaristaPassword(event.target.value)}
+                    className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-sm outline-none focus:border-black"
+                    autoComplete="current-password"
+                    required
+                  />
+                </label>
+                {baristaNotice ? <p className="mt-3 text-sm text-red-600">{baristaNotice}</p> : null}
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="mt-5 w-full rounded-full bg-black px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  {pending ? "Saving..." : "Clock in"}
+                </button>
+              </form>
+            </div>
+          </div>
+        ) : null}
 
         {/* Void Modal */}
         {voidModalOpen ? (

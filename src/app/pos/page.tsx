@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PosClient } from "@/components/PosClient";
 import { getSession } from "@/lib/auth";
+import { openBaristaShifts } from "@/lib/staff-sessions";
 import { getStore } from "@/lib/store";
 
 export default async function PosPage() {
@@ -10,6 +11,11 @@ export default async function PosPage() {
   }
 
   const store = await getStore();
+  const clockedInBaristas = openBaristaShifts(store.loginActivity ?? []).map((shift) => ({
+    id: shift.userId,
+    name: shift.name,
+    username: shift.username,
+  }));
 
   return (
     <main className="h-svh overflow-hidden bg-neutral-100 text-black">
@@ -20,6 +26,7 @@ export default async function PosPage() {
         categories={store.categories}
         promotions={store.promotions}
         orders={store.orders}
+        clockedInBaristas={clockedInBaristas}
       />
     </main>
   );

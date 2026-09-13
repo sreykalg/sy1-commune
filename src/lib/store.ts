@@ -329,6 +329,17 @@ function normalizeStore(store: StoreData): StoreData {
         title: "Manager",
       });
     }
+    if (!store.users.some((user) => user.role === "barista" && user.password)) {
+      const baristaUsernameTaken = store.users.some((user) => user.username === "barista");
+      store.users.push({
+        id: "barista-1",
+        username: baristaUsernameTaken ? `barista-${Date.now().toString(36)}` : "barista",
+        password: "commune",
+        name: "Barista",
+        role: "barista",
+        title: "Barista",
+      });
+    }
   }
   return store;
 }

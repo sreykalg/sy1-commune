@@ -27,6 +27,14 @@ export const DEFAULT_USERS: StaffUser[] = [
     role: "manager",
     title: "Manager",
   },
+  {
+    id: "barista-1",
+    username: "barista",
+    password: "commune",
+    name: "Barista",
+    role: "barista",
+    title: "Barista",
+  },
 ];
 
 export function staffUserId(username: string): string {
@@ -77,11 +85,8 @@ export function canUsePos(role: Role) {
 }
 
 export function normalizeStaffRole(item: Pick<StaffUser, "role" | "password">): Role {
-  if (item.role === "admin" || item.role === "manager" || item.role === "cashier") {
+  if (item.role === "admin" || item.role === "manager" || item.role === "cashier" || item.role === "barista") {
     return item.role;
-  }
-  if (item.role === "barista" && item.password) {
-    return "cashier";
   }
   return item.password ? "cashier" : "barista";
 }
