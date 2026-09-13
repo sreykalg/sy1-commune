@@ -64,17 +64,19 @@ function RowActions({
   onDelete,
   onDeleteMouseDown,
 }: {
-  editLabel: string;
+  editLabel?: string;
   deleteLabel: string;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
   onDeleteMouseDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <div className="inline-flex items-center justify-center gap-0.5">
-      <button type="button" aria-label={editLabel} onClick={onEdit} className={iconBtn}>
-        <PencilIcon />
-      </button>
+      {onEdit ? (
+        <button type="button" aria-label={editLabel} onClick={onEdit} className={iconBtn}>
+          <PencilIcon />
+        </button>
+      ) : null}
       <button
         type="button"
         aria-label={deleteLabel}
@@ -208,13 +210,6 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
     setRestocks(store.restocks ?? []);
     setCostings(store.costings ?? []);
   }, [store.orders, store.inventory, store.usageLogs, store.restocks, store.costings]);
-
-  const [editTxId, setEditTxId] = useState<string | null>(null);
-  const [txProduct, setTxProduct] = useState("");
-  const [txType, setTxType] = useState<"Purchase" | "Sale">("Sale");
-  const [txQty, setTxQty] = useState("");
-  const [txPrice, setTxPrice] = useState("");
-  const [txDate, setTxDate] = useState(getTodayDate());
 
   const [editStockId, setEditStockId] = useState<string | null>(null);
   const [stockName, setStockName] = useState("");
@@ -387,100 +382,6 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
     });
     await saveAdminData({ inventory });
   }
-
-  const handleSaveTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!txProduct || !txQty || !txPrice) return;
-    const qty = Number(txQty);
-    const prc = Number(txPrice);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(prc) || prc < 0) return;
-    const saveDate = editTxId
-      ? (transactions.find((t) => t.id === editTxId)?.date ?? txDate)
-      : filterMode === "date"
-        ? filterDate
-        : getTodayDate();
-
-    if (editTxId) {
-      const oldTx = transactions.find((t) => t.id === editTxId);
-      let nextStocks = stocks;
-      let nextUsages = usages;
-      if (oldTx) {
-        ({ nextStocks, nextUsages } = applyTransactionInventoryEffect(
-          nextStocks,
-          nextUsages,
-          oldTx.productName,
-          oldTx.type,
-          oldTx.quantity,
-          oldTx.date,
-          true,
-        ));
-      }
-      const nextTransactions = transactions.map((t) =>
-        t.id === editTxId
-          ? {
-              ...t,
-              productName: txProduct,
-              type: txType,
-              quantity: qty,
-              price: prc,
-              amount: qty * prc,
-              date: saveDate,
-              createdAt: phIsoFromDate(saveDate, t.createdAt),
-            }
-          : t,
-      );
-      ({ nextStocks, nextUsages } = applyTransactionInventoryEffect(
-        nextStocks,
-        nextUsages,
-        txProduct,
-        txType,
-        qty,
-        saveDate,
-        false,
-      ));
-      await persistInventoryAndUsage(nextStocks, nextUsages);
-      setTransactions(nextTransactions);
-      setEditTxId(null);
-      await persistOrders(nextTransactions);
-    } else {
-      const newTx: Transaction = {
-        id: `ord-${Date.now()}`,
-        productName: txProduct,
-        type: txType,
-        quantity: qty,
-        price: prc,
-        amount: qty * prc,
-        date: saveDate,
-        createdAt: phIsoFromDate(saveDate),
-      };
-      const nextTransactions = [newTx, ...transactions];
-      setTransactions(nextTransactions);
-      const { nextStocks, nextUsages } = applyTransactionInventoryEffect(
-        stocks,
-        usages,
-        txProduct,
-        txType,
-        qty,
-        saveDate,
-        false,
-      );
-      await persistInventoryAndUsage(nextStocks, nextUsages);
-      await persistOrders(nextTransactions);
-    }
-    setTxProduct("");
-    setTxQty("");
-    setTxPrice("");
-    setTxDate(getTodayDate());
-  };
-
-  const handleEditTransaction = (t: Transaction) => {
-    setEditTxId(t.id);
-    setTxProduct(t.productName);
-    setTxType(t.type);
-    setTxQty(t.quantity.toString());
-    setTxPrice(t.price.toString());
-    setTxDate(t.date);
-  };
 
   const handleDeleteTransaction = async (id: string) => {
     const tx = transactions.find((t) => t.id === id);
@@ -774,37 +675,6 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
 
       {activeTab === "transactions" && (
         <div className="space-y-6">
-          <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 shadow-sm space-y-4">
-            <div className="text-xs font-bold text-neutral-700 uppercase tracking-wide border-b border-neutral-300 pb-1">
-              {editTxId ? "Edit Transaction" : "New Transaction"}
-            </div>
-            <form onSubmit={handleSaveTransaction} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Product Name</label>
-                <input type="text" placeholder="e.g. Iced Latte" value={txProduct} onChange={(e) => setTxProduct(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Quantity</label>
-                <input type="number" placeholder="0" value={txQty} onChange={(e) => setTxQty(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Type</label>
-                <select value={txType} onChange={(e) => setTxType(e.target.value as "Purchase" | "Sale")} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm">
-                  <option value="Sale">Sale</option>
-                  <option value="Purchase">Purchase</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Price</label>
-                <input type="number" step="0.01" placeholder="0.00" value={txPrice} onChange={(e) => setTxPrice(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="flex-1 bg-black text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-neutral-800">{editTxId ? "Update" : "Save"}</button>
-                <button type="button" onClick={() => { setEditTxId(null); setTxProduct(""); setTxQty(""); setTxPrice(""); setTxDate(getTodayDate()); }} className="border border-neutral-300 bg-white text-black hover:bg-neutral-100 px-3 py-1.5 rounded text-sm font-medium">Clear</button>
-              </div>
-            </form>
-          </div>
-
           <div className="flex flex-wrap gap-4 items-center bg-neutral-50 p-3 rounded-lg border border-neutral-400 text-sm">
             <div className="flex items-center gap-2">
               <span className="text-xs text-neutral-600">Type:</span>
@@ -849,9 +719,7 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
                       <td className="p-3 border-r border-neutral-200 text-right font-semibold">₱{t.amount.toFixed(2)}</td>
                       <td className="p-3 text-center">
                         <RowActions
-                          editLabel={`Edit ${t.productName}`}
                           deleteLabel={`Delete ${t.productName}`}
-                          onEdit={() => handleEditTransaction(t)}
                           onDelete={() => void handleDeleteTransaction(t.id)}
                         />
                       </td>
