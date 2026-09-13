@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { approveVoidRequest } from "@/actions/pos";
+import { Trash2 } from "lucide-react";
+import { approveVoidRequest, deleteVoidRequest } from "@/actions/pos";
 import { formatMoney } from "@/lib/menu";
 import { phDateTimeLabel } from "@/lib/datetime";
 import type { VoidRequest } from "@/lib/types";
-
-function ticketLabel(request: VoidRequest) {
-  if (request.orderId) return request.orderId.slice(-6);
-  return "Checkout";
-}
 
 function toInputDateStr(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -103,6 +99,27 @@ function RequestActions({
             className="rounded-full bg-black px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
           >
             Approve
+          </button>
+          <button
+            type="button"
+            aria-label="Delete void request"
+            title="Delete void request"
+            disabled={pending}
+            onClick={() => {
+              if (!window.confirm("Delete this void request?")) return;
+              startTransition(async () => {
+                const result = await deleteVoidRequest(request.id);
+                if (result && "error" in result && result.error) {
+                  onNotice(result.error);
+                  return;
+                }
+                onNotice("Void request deleted.");
+              });
+            }}
+            className="inline-flex items-center justify-center rounded-full border border-neutral-200 p-2 text-neutral-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+          >
+            <Trash2 aria-hidden="true" />
+            <span className="sr-only">Delete</span>
           </button>
         </>
       ) : null}
@@ -202,7 +219,7 @@ export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{request.requestedByName}</p>
                     <p className="mt-0.5 text-xs text-neutral-500">
-                      {phDateTimeLabel(request.requestedAt)} · {ticketLabel(request)}
+                      {phDateTimeLabel(request.requestedAt)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -232,7 +249,6 @@ export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
                 <tr className="border-b border-neutral-200 text-xs font-medium tracking-wide text-neutral-400 uppercase">
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Cashier</th>
-                  <th className="px-4 py-3">Ticket</th>
                   <th className="px-4 py-3">Items</th>
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Status</th>
@@ -247,7 +263,6 @@ export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
                       {phDateTimeLabel(request.requestedAt)}
                     </td>
                     <td className="px-4 py-3 font-medium">{request.requestedByName}</td>
-                    <td className="px-4 py-3 text-neutral-600">{ticketLabel(request)}</td>
                     <td className="max-w-[220px] px-4 py-3 text-neutral-600">
                       {request.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
                     </td>
