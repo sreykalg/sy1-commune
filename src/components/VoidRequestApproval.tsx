@@ -87,49 +87,47 @@ function RequestActions({
   startTransition: ReturnType<typeof useTransition>[1];
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+    <div className="flex min-h-10 items-center justify-end gap-2">
       {request.status === "pending" ? (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await approveVoidRequest(request.id);
-                if (result && "error" in result && result.error) {
-                  onNotice(result.error);
-                  return;
-                }
-                onNotice("Void request approved.");
-              })
-            }
-            className="rounded-full bg-black px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            aria-label="Delete void request"
-            title="Delete void request"
-            disabled={pending}
-            onClick={() => {
-              if (!window.confirm("Delete this void request?")) return;
-              startTransition(async () => {
-                const result = await deleteVoidRequest(request.id);
-                if (result && "error" in result && result.error) {
-                  onNotice(result.error);
-                  return;
-                }
-                onNotice("Void request deleted.");
-              });
-            }}
-            className="inline-flex items-center justify-center rounded-full border border-neutral-200 p-2 text-neutral-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-          >
-            <TrashIcon />
-            <span className="sr-only">Delete</span>
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const result = await approveVoidRequest(request.id);
+              if (result && "error" in result && result.error) {
+                onNotice(result.error);
+                return;
+              }
+              onNotice("Void request approved.");
+            })
+          }
+          className="rounded-full bg-black px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+        >
+          Approve
+        </button>
       ) : null}
+      <button
+        type="button"
+        aria-label="Delete void request"
+        title="Delete void request"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm("Delete this void request?")) return;
+          startTransition(async () => {
+            const result = await deleteVoidRequest(request.id);
+            if (result && "error" in result && result.error) {
+              onNotice(result.error);
+              return;
+            }
+            onNotice("Void request deleted.");
+          });
+        }}
+        className="inline-flex size-9 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+      >
+        <TrashIcon />
+        <span className="sr-only">Delete</span>
+      </button>
     </div>
   );
 }
