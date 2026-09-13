@@ -15,6 +15,10 @@ import {
   voidOrder,
 } from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
+import {
+  SalePurchaseTransactions,
+  type InventoryTab,
+} from "@/components/SalePurchaseTransactions";
 import { formatMoney } from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
@@ -34,6 +38,7 @@ import type {
   PosState,
   Promotion,
   Session,
+  StoreData,
   VoidRequest,
 } from "@/lib/types";
 
@@ -46,7 +51,13 @@ type PosClientProps = {
   orders: Order[];
   printJobs: PrintJob[];
   voidRequests: VoidRequest[];
+  inventoryStore: Pick<
+    StoreData,
+    "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
+  >;
 };
+
+type PosPanel = "pos" | Extract<InventoryTab, "stock" | "restock">;
 
 const CASH_PRESETS = [500, 1000, 2000];
 const CHECKOUT_KEY = "commune_pos_checkout";
@@ -112,6 +123,7 @@ export function PosClient({
   orders,
   printJobs,
   voidRequests,
+  inventoryStore,
 }: PosClientProps) {
   const router = useRouter();
   const [cart, setCart] = useState<OrderItem[]>([]);
@@ -139,6 +151,7 @@ export function PosClient({
   const labelPrinter = useLabelPrinter();
   const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
+  const [activePanel, setActivePanel] = useState<PosPanel>("pos");
   const activePromos = PROMOTIONS_ENABLED
     ? promotions.filter((item) => item.active)
     : [];
@@ -661,6 +674,26 @@ export function PosClient({
           </div>
         </header>
 
+        {!isManager ? (
+          <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-neutral-200 bg-white px-4 py-2">
+            {(["pos", "stock", "restock"] as const).map((panel) => (
+              <button
+                key={panel}
+                type="button"
+                onClick={() => setActivePanel(panel)}
+                aria-current={activePanel === panel ? "page" : undefined}
+                className={`shrink-0 rounded-lg px-4 py-1.5 text-xs font-bold uppercase transition ${
+                  activePanel === panel
+                    ? "bg-black text-white"
+                    : "border border-neutral-200 bg-white text-neutral-700 hover:border-black"
+                }`}
+              >
+                {panel === "pos" ? "Transactions" : panel === "stock" ? "Stock Inventory" : "Restock"}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
         {/* Void Modal */}
         {voidModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -865,6 +898,19 @@ export function PosClient({
           />
         ) : null}
 
+        {!isManager && activePanel !== "pos" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-100 p-2 sm:p-4">
+            <SalePurchaseTransactions
+              store={inventoryStore}
+              tabs={["stock", "restock"]}
+              activeTab={activePanel}
+              onTabChange={(tab) => {
+                if (tab === "stock" || tab === "restock") setActivePanel(tab);
+              }}
+              showTabs={false}
+            />
+          </div>
+        ) : (
         <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
           {!pos.isOpen ? (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-neutral-100 px-6 text-center">
@@ -1343,6 +1389,7 @@ export function PosClient({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

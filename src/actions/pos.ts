@@ -41,6 +41,18 @@ async function requireAdmin() {
   return session;
 }
 
+async function requireInventoryAccess(hasAdminOnlyData: boolean) {
+  const session = await getSession();
+  if (
+    !session ||
+    (session.role !== "admin" && session.role !== "cashier") ||
+    (session.role === "cashier" && hasAdminOnlyData)
+  ) {
+    throw new Error("You do not have permission to change these store records.");
+  }
+  return session;
+}
+
 function markOrderVoided(store: StoreData, orderId: string, reason: string) {
   const order = store.orders.find((entry) => entry.id === orderId);
   if (!order) return "Ticket not found.";
@@ -126,7 +138,7 @@ export async function saveAdminData(data: {
   usageLogs?: StoreData["usageLogs"];
   orders?: StoreData["orders"];
 }) {
-  await requireAdmin();
+  await requireInventoryAccess(data.costings !== undefined || data.orders !== undefined);
   await updateStore((store) => {
     if (data.inventory) store.inventory = data.inventory;
     if (data.restocks) store.restocks = data.restocks;
@@ -134,12 +146,13 @@ export async function saveAdminData(data: {
     if (data.usageLogs) store.usageLogs = data.usageLogs;
     if (data.orders) store.orders = data.orders;
   });
+  revalidatePath("/pos");
   revalidatePath("/admin");
   return { ok: true };
 }
 
 export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing", id: string) {
-  await requireAdmin();
+  await requireInventoryAccess(kind === "order" || kind === "costing");
   await updateStore((store) => {
     if (kind === "order") {
       store.orders = store.orders.filter((order) => order.id !== id);
@@ -153,6 +166,7 @@ export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" 
       store.costings = store.costings.filter((record) => record.id !== id);
     }
   });
+  revalidatePath("/pos");
   revalidatePath("/admin");
   return { ok: true };
 }

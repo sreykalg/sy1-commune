@@ -4,7 +4,20 @@ import { costingIngredientForItem, cupsFromQuantity, formatQty, namesMatch, perC
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import type { Order, StoreData } from "@/lib/types";
 
-type TabType = "transactions" | "stock" | "restock" | "costing" | "used";
+export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used";
+
+type InventoryStore = Pick<
+  StoreData,
+  "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
+>;
+
+type SalePurchaseTransactionsProps = {
+  store: InventoryStore;
+  tabs?: readonly InventoryTab[];
+  activeTab?: InventoryTab;
+  onTabChange?: (tab: InventoryTab) => void;
+  showTabs?: boolean;
+};
 
 type Transaction = {
   id: string;
@@ -154,8 +167,20 @@ type UsageRecord = {
   soldAs: string;
 };
 
-export function SalePurchaseTransactions({ store }: { store: StoreData }) {
-  const [activeTab, setActiveTab] = useState<TabType>("transactions");
+export function SalePurchaseTransactions({
+  store,
+  tabs = ["transactions", "stock", "restock", "costing", "used"],
+  activeTab: controlledActiveTab,
+  onTabChange,
+  showTabs = true,
+}: SalePurchaseTransactionsProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState<InventoryTab>(tabs[0] ?? "transactions");
+  const activeTab = controlledActiveTab ?? internalActiveTab;
+
+  function setActiveTab(tab: InventoryTab) {
+    setInternalActiveTab(tab);
+    onTabChange?.(tab);
+  }
   const persistedTransactions: Transaction[] = ordersToTransactions(store.orders);
   const persistedStocks: StockItem[] = store.inventory.map((item) => ({
     id: item.id,
@@ -758,8 +783,8 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
 
   return (
     <div className="min-h-screen min-w-0 space-y-6 rounded-none border-0 border-neutral-300 bg-white p-3 sm:rounded-xl sm:border sm:p-6">
-      <div className="flex gap-2 overflow-x-auto border-b border-neutral-400 pb-3">
-        {(["transactions", "stock", "restock", "costing", "used"] as TabType[]).map((tab) => (
+      {showTabs ? <div className="flex gap-2 overflow-x-auto border-b border-neutral-400 pb-3">
+        {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -768,7 +793,7 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
             {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : "Usage Logbook"}
           </button>
         ))}
-      </div>
+      </div> : null}
 
       {dateRangeFilter}
 
