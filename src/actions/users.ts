@@ -373,6 +373,30 @@ export async function updateStaffSessionTimes(input: {
   return { ok: true };
 }
 
+export async function deleteStaffSession(input: { loginId?: string; logoutId?: string }) {
+  await requireAdmin();
+
+  if (!input.loginId && !input.logoutId) {
+    return { error: "No in / out record was selected." };
+  }
+
+  let removed = false;
+  await updateStore((store) => {
+    const ids = new Set([input.loginId, input.logoutId].filter(Boolean));
+    const existing = store.loginActivity ?? [];
+    const next = existing.filter((entry) => {
+      if (!ids.has(entry.id)) return true;
+      removed = true;
+      return false;
+    });
+    store.loginActivity = next;
+  });
+
+  if (!removed) return { error: "In / out record not found." };
+  refresh();
+  return { ok: true };
+}
+
 export async function createOffRequest(input: { userId?: string; date: string; reason: string }) {
   const session = await getSession();
   if (!session) return { error: "Sign in first." };
