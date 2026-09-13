@@ -73,7 +73,7 @@ type PosClientProps = {
   >;
 };
 
-type PosPanel = "pos" | Extract<InventoryTab, "stock" | "restock">;
+type PosPanel = "pos" | Extract<InventoryTab, "transactions" | "stock" | "restock">;
 
 const CASH_PRESETS = [500, 1000, 2000];
 const CHECKOUT_KEY = "commune_pos_checkout";
@@ -182,6 +182,7 @@ export function PosClient({
   const labelPrinter = useLabelPrinter();
   const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<PosPanel>("pos");
   const activePromos = PROMOTIONS_ENABLED
     ? promotions.filter((item) => item.active)
@@ -275,6 +276,22 @@ export function PosClient({
       voidRequestId: activeVoidRequestId,
     });
   }, [checkoutReady, session.userId, cart, tendered, paymentMethod, appliedPromoId, activeVoidRequestId]);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (
@@ -675,102 +692,237 @@ export function PosClient({
   return (
     <div className="pos-root relative flex h-svh flex-col overflow-hidden bg-neutral-100 text-black">
       <div className="pos-screen flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between bg-black px-4 text-white">
-          <div className="flex min-w-0 items-center gap-3">
-            <p className="text-base font-bold tracking-tight lowercase">commune.</p>
-            <p className="truncate text-sm font-medium text-white/80">
+        <header className="flex h-12 shrink-0 items-center gap-3 bg-black px-3 text-white">
+          <button
+            type="button"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-white transition hover:bg-neutral-800"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 stroke-current" fill="none">
+              {menuOpen ? (
+                <path d="M6 6l12 12M18 6L6 18" strokeWidth="1.8" />
+              ) : (
+                <path d="M5 8h14M5 12h14M5 16h14" strokeWidth="1.8" />
+              )}
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivePanel("pos")}
+            className="text-base font-bold tracking-tight lowercase"
+          >
+            commune.
+          </button>
+          {activePanel !== "pos" ? (
+            <p className="truncate text-sm font-medium text-white/70">
+              {activePanel === "transactions"
+                ? "Transaction"
+                : activePanel === "stock"
+                  ? "Stock inventory"
+                  : "Restock"}
+            </p>
+          ) : null}
+        </header>
+
+        <button
+          type="button"
+          tabIndex={menuOpen ? 0 : -1}
+          aria-label="Close menu"
+          onClick={() => setMenuOpen(false)}
+          className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ${
+            menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="POS menu"
+          aria-hidden={!menuOpen}
+          className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white text-black shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition-transform duration-200 ${
+            menuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
+            <button
+              type="button"
+              onClick={() => {
+                setActivePanel("pos");
+                setMenuOpen(false);
+              }}
+              className="text-sm font-semibold tracking-tight lowercase"
+            >
+              commune.
+            </button>
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-300 text-neutral-700 transition hover:border-black hover:bg-black hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 stroke-current" fill="none">
+                <path d="M6 6l12 12M18 6L6 18" strokeWidth="1.8" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {!isManager ? (
+              <div>
+                <p className="px-4 pb-1 text-[11px] font-medium tracking-wide text-neutral-400 uppercase">
+                  Inventory
+                </p>
+                {(
+                  [
+                    ["transactions", "Transaction"],
+                    ["stock", "Stock inventory"],
+                    ["restock", "Restock"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={activePanel === id ? "page" : undefined}
+                    onClick={() => {
+                      setActivePanel(id);
+                      setMenuOpen(false);
+                    }}
+                    className={`mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+                      activePanel === id
+                        ? "bg-black text-white"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className={`${isManager ? "" : "mt-4 border-t border-neutral-100 pt-4"}`}>
+              <button
+                type="button"
+                disabled={pending || !labelPrinter.supported}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      if (labelPrinter.connected) {
+                        await labelPrinter.disconnect();
+                        setMessage("Label printer disconnected.");
+                        return;
+                      }
+                      await labelPrinter.connect();
+                      setMessage("Label printer connected.");
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error ? error.message : "Label printer error.",
+                      );
+                    }
+                  })
+                }
+                className="mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
+              >
+                {labelPrinter.connected ? "Labels on" : "Connect labels"}
+              </button>
+              <button
+                type="button"
+                disabled={pending || !receiptPrinter.supported}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      if (receiptPrinter.connected) {
+                        await receiptPrinter.disconnect();
+                        setMessage("Receipt printer disconnected.");
+                        return;
+                      }
+                      await receiptPrinter.connect();
+                      setMessage("Receipt printer connected.");
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error ? error.message : "Receipt printer error.",
+                      );
+                    }
+                  })
+                }
+                className="mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
+              >
+                {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
+              </button>
+            </div>
+
+            <div className="mt-4 border-t border-neutral-100 pt-4">
+              <p className="px-4 pb-1 text-[11px] font-medium tracking-wide text-neutral-400 uppercase">
+                Baristas
+              </p>
+              {onShift.map((barista) => (
+                <div
+                  key={barista.id}
+                  className="mb-1 flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5"
+                >
+                  <p className="min-w-0 truncate text-sm font-medium">In - {barista.name}</p>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const result = await punchBaristaShift({ type: "logout", userId: barista.id });
+                        if (result && "error" in result && result.error) {
+                          setMessage(result.error);
+                          return;
+                        }
+                        setOnShift((current) => current.filter((entry) => entry.id !== barista.id));
+                        setMessage(`${barista.name} clocked out.`);
+                        router.refresh();
+                      })
+                    }
+                    className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium hover:border-black disabled:opacity-40"
+                  >
+                    Out
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setBaristaUsername("");
+                  setBaristaPassword("");
+                  setBaristaNotice(null);
+                  setBaristaModalOpen(true);
+                  setMenuOpen(false);
+                }}
+                className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black"
+              >
+                {onShift.length === 0 ? "Barista in" : "Barista in / out"}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-200 p-3">
+            <p className="px-4 py-2 text-sm font-medium text-neutral-900">
               {session.name}
-              <span className="ml-2 text-xs font-normal text-white/50">
+              <span className="ml-2 text-xs font-normal text-neutral-400">
                 {isManager ? "manager" : "cashier"}
               </span>
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setBaristaUsername("");
-                setBaristaPassword("");
-                setBaristaNotice(null);
-                setBaristaModalOpen(true);
-              }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:opacity-50 ${
-                onShift.length > 0
-                  ? "bg-white text-black hover:bg-neutral-200"
-                  : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
-              }`}
-            >
-              {onShift.length === 0
-                ? "Barista in"
-                : onShift.length === 1
-                  ? `In - ${onShift[0].name}`
-                  : `${onShift.length} baristas in`}
-            </button>
-            <button
-              type="button"
-              disabled={pending || !labelPrinter.supported}
-              onClick={() =>
-                startTransition(async () => {
-                  try {
-                    if (labelPrinter.connected) {
-                      await labelPrinter.disconnect();
-                      setMessage("Label printer disconnected.");
-                      return;
-                    }
-                    await labelPrinter.connect();
-                    setMessage("Label printer connected.");
-                  } catch (error) {
-                    setMessage(
-                      error instanceof Error ? error.message : "Label printer error.",
-                    );
-                  }
-                })
-              }
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
-            >
-              {labelPrinter.connected ? "Labels on" : "Connect labels"}
-            </button>
-            <button
-              type="button"
-              disabled={pending || !receiptPrinter.supported}
-              onClick={() =>
-                startTransition(async () => {
-                  try {
-                    if (receiptPrinter.connected) {
-                      await receiptPrinter.disconnect();
-                      setMessage("Receipt printer disconnected.");
-                      return;
-                    }
-                    await receiptPrinter.connect();
-                    setMessage("Receipt printer connected.");
-                  } catch (error) {
-                    setMessage(
-                      error instanceof Error ? error.message : "Receipt printer error.",
-                    );
-                  }
-                })
-              }
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
-            >
-              {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
-            </button>
             <button
               type="button"
               disabled={pending}
               onClick={() => {
                 if (cart.length > 0) {
                   setMessage("Finish or void the checkout before logging out.");
+                  setMenuOpen(false);
                   return;
                 }
                 startTransition(async () => await logout());
               }}
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
+              className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
             >
               {pending ? "Logging out..." : "Log out"}
             </button>
           </div>
-        </header>
+        </aside>
 
         {drinkPick ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -1034,26 +1186,6 @@ export function PosClient({
           </div>
         ) : null}
 
-        {!isManager ? (
-          <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-neutral-200 bg-white px-4 py-2">
-            {(["pos", "stock", "restock"] as const).map((panel) => (
-              <button
-                key={panel}
-                type="button"
-                onClick={() => setActivePanel(panel)}
-                aria-current={activePanel === panel ? "page" : undefined}
-                className={`shrink-0 rounded-lg px-4 py-1.5 text-xs font-bold uppercase transition ${
-                  activePanel === panel
-                    ? "bg-black text-white"
-                    : "border border-neutral-200 bg-white text-neutral-700 hover:border-black"
-                }`}
-              >
-                {panel === "pos" ? "Transactions" : panel === "stock" ? "Stock Inventory" : "Restock"}
-              </button>
-            ))}
-          </nav>
-        ) : null}
-
         {/* Void Modal */}
         {voidModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -1262,10 +1394,12 @@ export function PosClient({
           <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-100 p-2 sm:p-4">
             <SalePurchaseTransactions
               store={inventoryStore}
-              tabs={["stock", "restock"]}
+              tabs={["transactions", "stock", "restock"]}
               activeTab={activePanel}
               onTabChange={(tab) => {
-                if (tab === "stock" || tab === "restock") setActivePanel(tab);
+                if (tab === "transactions" || tab === "stock" || tab === "restock") {
+                  setActivePanel(tab);
+                }
               }}
               showTabs={false}
             />
