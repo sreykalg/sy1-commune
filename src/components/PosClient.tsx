@@ -451,8 +451,8 @@ export function PosClient({
         appliedPromoId,
         paymentMethod,
       );
-      if ("error" in result && result.error) {
-        setMessage(result.error);
+      if (!result.requestId) {
+        setMessage(result.error ?? "Unable to send the void request.");
         return;
       }
       setActiveVoidRequestId(result.requestId);
