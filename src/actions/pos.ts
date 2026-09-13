@@ -152,8 +152,8 @@ export async function saveAdminData(data: {
   return { ok: true };
 }
 
-export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing", id: string) {
-  await requireInventoryAccess(kind === "order" || kind === "costing");
+export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing" | "usage", id: string) {
+  await requireInventoryAccess(kind === "order" || kind === "costing" || kind === "usage");
   await updateStore((store) => {
     if (kind === "order") {
       store.orders = store.orders.filter((order) => order.id !== id);
@@ -163,8 +163,10 @@ export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" 
       store.inventory = store.inventory.filter((item) => item.id !== id);
     } else if (kind === "restock") {
       store.restocks = store.restocks.filter((record) => record.id !== id);
-    } else {
+    } else if (kind === "costing") {
       store.costings = store.costings.filter((record) => record.id !== id);
+    } else {
+      store.usageLogs = store.usageLogs.filter((record) => record.id !== id);
     }
   });
   revalidatePath("/pos");
