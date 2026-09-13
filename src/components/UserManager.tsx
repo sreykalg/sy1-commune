@@ -10,6 +10,7 @@ import {
   setOffRequestStatus,
   updateLoginGates,
   updateStaffSessionTimes,
+  deleteStaffSession,
   updateStaffUser,
 } from "@/actions/users";
 import type { PublicStaffUser } from "@/lib/users";
@@ -437,14 +438,42 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                                   </button>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  disabled={pending}
-                                  onClick={() => startSessionEdit(row)}
-                                  className="hover:underline disabled:opacity-40"
-                                >
-                                  Edit
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={pending}
+                                    onClick={() => startSessionEdit(row)}
+                                    className="hover:underline disabled:opacity-40"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete in / out record for ${row.name}`}
+                                    title="Delete in / out record"
+                                    disabled={pending}
+                                    onClick={() => {
+                                      if (!window.confirm(`Delete this in / out record for ${row.name}?`)) return;
+                                      startTransition(async () => {
+                                        const result = await deleteStaffSession({
+                                          loginId: row.loginId ?? undefined,
+                                          logoutId: row.logoutId ?? undefined,
+                                        });
+                                        if (result && "error" in result && result.error) {
+                                          setNotice(result.error);
+                                          return;
+                                        }
+                                        setNotice("In / out record deleted.");
+                                      });
+                                    }}
+                                    className="inline-flex size-8 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                  >
+                                    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" aria-hidden="true">
+                                      <path d="M5 7h14M10 7V5h4v2M8 7l1 12h6l1-12" strokeWidth="1.7" />
+                                    </svg>
+                                    <span className="sr-only">Delete</span>
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
