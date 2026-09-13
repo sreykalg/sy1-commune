@@ -2,18 +2,33 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { logout } from "@/actions/auth";
-import { createOrder, openPos, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
+import {
+  beginPrintJob,
+  createOrder,
+  finishPrintJob,
+  openPos,
+  queueReprintJobs,
+  verifyManager,
+  voidCheckout,
+  voidOrder,
+} from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { formatMoney } from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
-import { drinkReceipts, nextTicketNo, type ReceiptTicket } from "@/lib/escpos";
+import {
+  receiptFromOrder,
+  type ReceiptTicket,
+} from "@/lib/escpos";
+import { useLabelPrinter } from "@/lib/label-printer";
 import { useReceiptPrinter } from "@/lib/receipt-printer";
 import type {
   MenuItem,
   Order,
   OrderItem,
   PaymentMethod,
+  PrintJob,
+  PrintJobType,
   PosState,
   Promotion,
   Session,
@@ -26,6 +41,7 @@ type PosClientProps = {
   categories: string[];
   promotions: Promotion[];
   orders: Order[];
+  printJobs: PrintJob[];
 };
 
 const CASH_PRESETS = [500, 1000, 2000];
@@ -86,6 +102,7 @@ export function PosClient({
   categories,
   promotions,
   orders,
+  printJobs,
 }: PosClientProps) {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [query, setQuery] = useState("");
@@ -101,14 +118,38 @@ export function PosClient({
   const [voidTodayOnly, setVoidTodayOnly] = useState(true);
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoId, setPromoId] = useState<string | null>(null);
-  const [previewTicket, setPreviewTicket] = useState<ReceiptTicket | null>(null);
+  const [printOrderId, setPrintOrderId] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<ReceiptTicket | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [lastOrder, setLastOrder] = useState<Order | null>(null);
+  const [localPrintJobs, setLocalPrintJobs] = useState<PrintJob[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const printer = useReceiptPrinter();
+  const labelPrinter = useLabelPrinter();
+  const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
   const activePromos = promotions.filter((item) => item.active);
+  const availableOrders = useMemo(() => {
+    const byId = new Map(orders.map((order) => [order.id, order]));
+    if (lastOrder) byId.set(lastOrder.id, lastOrder);
+    return [...byId.values()]
+      .filter((order) => !order.voided)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [lastOrder, orders]);
+  const knownPrintJobs = useMemo(() => {
+    const byId = new Map(printJobs.map((job) => [job.id, job]));
+    for (const job of localPrintJobs) byId.set(job.id, job);
+    return [...byId.values()];
+  }, [localPrintJobs, printJobs]);
+  const selectedPrintOrder = availableOrders.find(
+    (order) => order.id === printOrderId,
+  );
+  const selectedPrintTicket = selectedPrintOrder
+    ? receiptFromOrder(selectedPrintOrder, availableOrders, menu)
+    : null;
+  const selectedPrintJobs = selectedPrintOrder
+    ? knownPrintJobs.filter((job) => job.orderId === selectedPrintOrder.id)
+    : [];
 
   // Helper function to normalize category strings (combines "Non Coffee" and "Non-Coffee")
   const normalizeCat = (catName: string) => catName.replace(/^non\s*coffee$/i, "Non-Coffee");
@@ -140,14 +181,21 @@ export function PosClient({
   }, [menu, category, query]);
 
   useEffect(() => {
-    const saved = readCheckout(session.userId, menu);
-    if (saved) {
-      setCart(saved.cart);
-      setTendered(saved.tendered);
-      setPaymentMethod(saved.paymentMethod);
-      setPromoId(saved.promoId);
-    }
-    setCheckoutReady(true);
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      const saved = readCheckout(session.userId, menu);
+      if (saved) {
+        setCart(saved.cart);
+        setTendered(saved.tendered);
+        setPaymentMethod(saved.paymentMethod);
+        setPromoId(saved.promoId);
+      }
+      setCheckoutReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [session.userId, menu]);
 
   useEffect(() => {
@@ -162,9 +210,14 @@ export function PosClient({
   }, [checkoutReady, session.userId, cart, tendered, paymentMethod, promoId]);
 
   useEffect(() => {
-    if (promoId && !promotions.some((item) => item.id === promoId && item.active)) {
-      setPromoId(null);
-    }
+    if (!promoId || promotions.some((item) => item.id === promoId && item.active)) return;
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) setPromoId(null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [promoId, promotions]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -297,6 +350,7 @@ export function PosClient({
       setPromoOpen(false);
       setLastOrderId(null);
       setLastTicket(null);
+      setLastOrder(null);
       setVoidUsername("");
       setVoidPassword("");
       setVoidReason("");
@@ -306,54 +360,136 @@ export function PosClient({
     });
   }
 
-  function currentTicket(): ReceiptTicket {
+  function printTicket() {
+    const order =
+      (lastOrderId
+        ? availableOrders.find((entry) => entry.id === lastOrderId)
+        : undefined) ?? availableOrders[0];
+    if (!order) {
+      setMessage("Complete an order before opening the print flow.");
+      return;
+    }
+    setPrintOrderId(order.id);
+  }
+
+  function upsertPrintJobs(updated: PrintJob[]) {
+    setLocalPrintJobs((current) => {
+      const byId = new Map(current.map((job) => [job.id, job]));
+      for (const job of updated) byId.set(job.id, job);
+      return [...byId.values()];
+    });
+  }
+
+  function labelTicketForJob(order: Order, job: PrintJob): ReceiptTicket {
+    const ticket = receiptFromOrder(order, availableOrders, menu);
+    const source = job.label
+      ? order.items[job.label.itemIndex]
+      : undefined;
+    if (!job.label) return { ...ticket, items: [] };
     return {
-      ticketNo: nextTicketNo(orders),
-      barista: session.name,
-      items: cart.map((item) => ({
-        ...item,
-        category: menu.find((menuItem) => menuItem.id === item.productId)?.category,
-      })),
-      subtotal,
-      discount,
-      promoLabel: promo?.label,
-      total,
-      paymentMethod,
-      paid,
-      change,
-      at: new Date(),
+      ...ticket,
+      items: [
+        {
+          productId: job.label.productId,
+          name: job.label.name,
+          price: job.label.price,
+          qty: 1,
+          category: source?.category,
+        },
+      ],
     };
   }
 
-  function printTicket() {
-    if (cart.length > 0) {
-      const ticket = currentTicket();
-      if (drinkReceipts(ticket).length === 0) {
-        setMessage("Add drinks before printing.");
-        return;
+  async function attemptPrintJob(job: PrintJob, order: Order): Promise<PrintJob> {
+    const started = await beginPrintJob(job.id);
+    if ("error" in started) throw new Error(started.error);
+    upsertPrintJobs([started.job]);
+
+    let failure: string | undefined;
+    try {
+      if (job.type === "cup-label") {
+        if (!labelPrinter.supported) {
+          throw new Error("Web Serial is unavailable for the label printer.");
+        }
+        if (!labelPrinter.connected) {
+          throw new Error("Label printer is disconnected.");
+        }
+        await labelPrinter.printLabel(labelTicketForJob(order, job));
+      } else {
+        if (!receiptPrinter.supported) {
+          throw new Error("Web Serial is unavailable for the receipt printer.");
+        }
+        if (!receiptPrinter.connected) {
+          throw new Error("Receipt printer is disconnected.");
+        }
+        await receiptPrinter.printReceipt(
+          receiptFromOrder(order, availableOrders, menu),
+        );
       }
-      setPreviewTicket(ticket);
-      return;
+    } catch (error) {
+      failure = error instanceof Error ? error.message : "Printer failed.";
     }
-    if (lastTicket) {
-      if (drinkReceipts(lastTicket).length === 0) {
-        setMessage("The last order has no drinks to print.");
-        return;
-      }
-      setPreviewTicket(lastTicket);
-      return;
-    }
-    setMessage("Add items before printing.");
+
+    const finished = await finishPrintJob(
+      job.id,
+      failure ? "failed" : "printed",
+      failure,
+    );
+    if ("error" in finished) throw new Error(finished.error);
+    upsertPrintJobs([finished.job]);
+    return finished.job;
   }
 
-  async function sendSlips(ticket: ReceiptTicket) {
-    if (!printer.supported) {
-      throw new Error("Open the POS in Chrome or Edge to use the receipt printer.");
+  async function attemptPrintJobs(jobs: PrintJob[], order: Order) {
+    const results: PrintJob[] = [];
+    for (const job of jobs) {
+      try {
+        results.push(await attemptPrintJob(job, order));
+      } catch {
+        results.push({
+          ...job,
+          status: "failed",
+          lastError: "Could not record the print attempt.",
+        });
+      }
     }
-    if (!printer.connected) {
-      throw new Error("Connect the receipt printer first.");
+    return results;
+  }
+
+  function printSummary(results: PrintJob[]): string {
+    const printed = results.filter((job) => job.status === "printed").length;
+    const failed = results.length - printed;
+    if (failed === 0) return `${printed} printed`;
+    if (printed === 0) return `${failed} waiting for retry`;
+    return `${printed} printed, ${failed} waiting for retry`;
+  }
+
+  async function printTypeForOrder(order: Order, type: PrintJobType) {
+    let jobs = knownPrintJobs.filter(
+      (job) =>
+        job.orderId === order.id &&
+        job.type === type &&
+        (job.status === "pending" || job.status === "failed"),
+    );
+    if (jobs.length === 0) {
+      const queued = await queueReprintJobs(order.id, type);
+      if ("error" in queued) throw new Error(queued.error);
+      jobs = queued.printJobs;
+      upsertPrintJobs(jobs);
     }
-    await printer.print(ticket);
+    const results = await attemptPrintJobs(jobs, order);
+    setMessage(
+      `${type === "cup-label" ? "Cup labels" : "Customer receipt"}: ${printSummary(results)}.`,
+    );
+  }
+
+  async function retrySingleJob(job: PrintJob) {
+    const order = availableOrders.find((entry) => entry.id === job.orderId);
+    if (!order) throw new Error("Completed order not found.");
+    const result = await attemptPrintJob(job, order);
+    setMessage(
+      `${job.type === "cup-label" ? "Cup label" : "Customer receipt"}: ${result.status}.`,
+    );
   }
 
   return (
@@ -372,27 +508,51 @@ export function PosClient({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={pending || !printer.supported}
+              disabled={pending || !labelPrinter.supported}
               onClick={() =>
                 startTransition(async () => {
                   try {
-                    if (printer.connected) {
-                      await printer.disconnect();
-                      setMessage("Printer disconnected.");
+                    if (labelPrinter.connected) {
+                      await labelPrinter.disconnect();
+                      setMessage("Label printer disconnected.");
                       return;
                     }
-                    await printer.connect();
-                    setMessage("Printer connected.");
+                    await labelPrinter.connect();
+                    setMessage("Label printer connected.");
                   } catch (error) {
                     setMessage(
-                      error instanceof Error ? error.message : "Printer error.",
+                      error instanceof Error ? error.message : "Label printer error.",
                     );
                   }
                 })
               }
               className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
             >
-              {printer.connected ? "Printer on" : "Connect printer"}
+              {labelPrinter.connected ? "Labels on" : "Connect labels"}
+            </button>
+            <button
+              type="button"
+              disabled={pending || !receiptPrinter.supported}
+              onClick={() =>
+                startTransition(async () => {
+                  try {
+                    if (receiptPrinter.connected) {
+                      await receiptPrinter.disconnect();
+                      setMessage("Receipt printer disconnected.");
+                      return;
+                    }
+                    await receiptPrinter.connect();
+                    setMessage("Receipt printer connected.");
+                  } catch (error) {
+                    setMessage(
+                      error instanceof Error ? error.message : "Receipt printer error.",
+                    );
+                  }
+                })
+              }
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
+            >
+              {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
             </button>
             <button
               type="button"
@@ -545,25 +705,58 @@ export function PosClient({
           </div>
         ) : null}
 
-        {previewTicket ? (
+        {selectedPrintTicket && selectedPrintOrder ? (
           <ReceiptPreview
-            ticket={previewTicket}
-            paperWidth={printer.paperWidth}
-            printerReady={printer.connected}
+            ticket={selectedPrintTicket}
+            orderId={selectedPrintOrder.id}
+            orderOptions={availableOrders.map((order) => ({
+              id: order.id,
+              label: `#${order.ticketNo ?? order.id.slice(-4)} · ${phDateTimeLabel(order.createdAt)} · ${formatMoney(order.total)}`,
+            }))}
+            printJobs={selectedPrintJobs}
+            labelPaperWidth={labelPrinter.paperWidth}
+            receiptPaperWidth={receiptPrinter.paperWidth}
+            labelBaudRate={labelPrinter.baudRate}
+            receiptBaudRate={receiptPrinter.baudRate}
+            labelPrinterReady={labelPrinter.connected}
+            receiptPrinterReady={receiptPrinter.connected}
             testPrinterEnabled={TEST_PRINTER_ENABLED}
             pending={pending}
-            onClose={() => setPreviewTicket(null)}
-            onPrint={() =>
+            onClose={() => setPrintOrderId(null)}
+            onSelectOrder={setPrintOrderId}
+            onSetLabelPaperWidth={labelPrinter.setPaperWidth}
+            onSetReceiptPaperWidth={receiptPrinter.setPaperWidth}
+            onSetLabelBaudRate={labelPrinter.setBaudRate}
+            onSetReceiptBaudRate={receiptPrinter.setBaudRate}
+            onPrintLabels={() =>
               startTransition(async () => {
                 try {
-                  await sendSlips(previewTicket);
-                  setMessage("Drink receipts sent.");
-                  setPreviewTicket(null);
+                  await printTypeForOrder(selectedPrintOrder, "cup-label");
                 } catch (error) {
                   setMessage(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not print receipt.",
+                    error instanceof Error ? error.message : "Could not print labels.",
+                  );
+                }
+              })
+            }
+            onPrintReceipt={() =>
+              startTransition(async () => {
+                try {
+                  await printTypeForOrder(selectedPrintOrder, "customer-receipt");
+                } catch (error) {
+                  setMessage(
+                    error instanceof Error ? error.message : "Could not print receipt.",
+                  );
+                }
+              })
+            }
+            onRetryJob={(job) =>
+              startTransition(async () => {
+                try {
+                  await retrySingleJob(job);
+                } catch (error) {
+                  setMessage(
+                    error instanceof Error ? error.message : "Could not retry print job.",
                   );
                 }
               })
@@ -960,7 +1153,7 @@ export function PosClient({
                   type="button"
                   onClick={printTicket}
                   className={`rounded-lg border py-2 text-xs transition ${
-                    printer.connected || lastTicket || cart.length > 0
+                    labelPrinter.connected || receiptPrinter.connected || availableOrders.length > 0
                       ? "border-black bg-black text-white"
                       : "border-neutral-300 hover:border-black"
                   }`}
@@ -985,50 +1178,43 @@ export function PosClient({
                 disabled={pending || !canCharge}
                 onClick={() =>
                   startTransition(async () => {
-                    const ticket = currentTicket();
                     const result = await createOrder(
                       cart,
                       promoId,
                       paymentMethod,
                       paid,
                     );
-                    if (result.error) {
+                    if (!result.ok) {
                       setMessage(result.error);
                       return;
                     }
-                    const saved: ReceiptTicket = {
-                      ...ticket,
-                      ticketNo: result.ticketNo || ticket.ticketNo,
-                    };
+                    const savedOrder = result.order;
+                    const saved = receiptFromOrder(
+                      savedOrder,
+                      [savedOrder, ...availableOrders],
+                      menu,
+                    );
                     setLastTicket(saved);
-                    setLastOrderId(result.id ?? null);
+                    setLastOrder(savedOrder);
+                    setLastOrderId(savedOrder.id);
+                    upsertPrintJobs(result.printJobs);
                     setCart([]);
                     setTendered("");
                     setPaymentMethod("cash");
                     setPromoId(null);
                     setPromoOpen(false);
-                    const receiptCount = drinkReceipts(saved).length;
-                    if (printer.connected && receiptCount > 0) {
-                      try {
-                        await printer.print(saved);
-                        setMessage(
-                          `Paid ${formatMoney(result.total ?? 0)} · ${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"} printed · tap Print to reprint`,
-                        );
-                      } catch {
-                        setMessage(
-                          `Paid ${formatMoney(result.total ?? 0)} · printer failed · tap Print`,
-                        );
-                      }
-                      return;
-                    }
-                    if (receiptCount === 0) {
-                      setMessage(
-                        `Paid ${formatMoney(result.total ?? 0)} · no drinks to print`,
-                      );
-                      return;
-                    }
+                    const labelJobs = result.printJobs.filter(
+                      (job) => job.type === "cup-label",
+                    );
+                    const receiptJobs = result.printJobs.filter(
+                      (job) => job.type === "customer-receipt",
+                    );
+                    const [labelResults, receiptResults] = await Promise.all([
+                      attemptPrintJobs(labelJobs, savedOrder),
+                      attemptPrintJobs(receiptJobs, savedOrder),
+                    ]);
                     setMessage(
-                      `Paid ${formatMoney(result.total ?? 0)} · tap Print for last receipt`,
+                      `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
                     );
                   })
                 }

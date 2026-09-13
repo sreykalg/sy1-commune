@@ -20,6 +20,7 @@ export default async function PosPage() {
         categories={store.categories}
         promotions={store.promotions}
         orders={store.orders}
+        printJobs={store.printJobs}
       />
     </main>
   );

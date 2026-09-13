@@ -5,9 +5,7 @@ import type { MenuItem, Order, OrderItem, PaymentMethod } from "@/lib/types";
 
 export type PaperWidth = 58 | 80;
 
-export type ReceiptItem = OrderItem & {
-  category?: string;
-};
+export type ReceiptItem = OrderItem;
 
 export type ReceiptTicket = {
   ticketNo: string;
@@ -87,7 +85,9 @@ export function receiptFromOrder(
     barista: order.baristaName,
     items: order.items.map((item) => ({
       ...item,
-      category: menu.find((menuItem) => menuItem.id === item.productId)?.category,
+      category:
+        item.category ??
+        menu.find((menuItem) => menuItem.id === item.productId)?.category,
     })),
     subtotal,
     discount: order.discount ?? 0,
@@ -118,9 +118,13 @@ export function itemCount(items: OrderItem[]): number {
   return items.reduce((sum, item) => sum + item.qty, 0);
 }
 
+export function isDrinkCategory(category?: string): boolean {
+  return Boolean(category && !/food|pastr/i.test(category));
+}
+
 export function drinkReceipts(ticket: ReceiptTicket): ReceiptTicket[] {
   return ticket.items.flatMap((item) => {
-    if (!item.category || /food|pastr/i.test(item.category)) return [];
+    if (!isDrinkCategory(item.category)) return [];
     return Array.from({ length: item.qty }, () => ({
       ...ticket,
       items: [{ ...item, qty: 1 }],
@@ -261,19 +265,19 @@ export function customerLines(
   if (ticket.paid && ticket.paid > 0) {
     lines.push({ kind: "rule" });
     const method = paymentLabel(ticket.paymentMethod);
+    lines.push({
+      kind: "text",
+      text: padLine("Payment", method, width),
+    });
     if (ticket.paymentMethod === "gcash" || ticket.paymentMethod === "maya") {
       lines.push({
         kind: "text",
-        text: padLine("Pay", method, width),
-      });
-      lines.push({
-        kind: "text",
-        text: padLine(method, receiptMoney(ticket.paid), width),
+        text: padLine("Paid", receiptMoney(ticket.paid), width),
       });
     } else {
       lines.push({
         kind: "text",
-        text: padLine("Cash", receiptMoney(ticket.paid), width),
+        text: padLine("Cash / Tendered", receiptMoney(ticket.paid), width),
       });
       lines.push({
         kind: "text",
@@ -291,7 +295,7 @@ export function customerLines(
   return lines;
 }
 
-export function baristaLines(ticket: ReceiptTicket, width: number): PrintLine[] {
+export function baristaLines(ticket: ReceiptTicket): PrintLine[] {
   const drinks = itemCount(ticket.items);
   const lines: PrintLine[] = [
     { kind: "text", text: "MAKE THESE DRINKS", align: 1, bold: true },
@@ -335,7 +339,7 @@ export function encodeBaristaTicket(
   paperWidth: PaperWidth,
 ): Uint8Array {
   const width = paperColumns(paperWidth);
-  return buildBytes(baristaLines(ticket, width), width);
+  return buildBytes(baristaLines(ticket), width);
 }
 
 export function encodeOrderSlips(
