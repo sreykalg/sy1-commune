@@ -74,7 +74,7 @@ type PosClientProps = {
   >;
 };
 
-type PosPanel = "pos" | Extract<InventoryTab, "transactions" | "stock" | "restock">;
+type PosPanel = "pos" | Extract<InventoryTab, "stock" | "restock">;
 
 const CASH_PRESETS = [500, 1000, 2000];
 const CHECKOUT_KEY = "commune_pos_checkout";
@@ -768,11 +768,7 @@ export function PosClient({
           </button>
           {activePanel !== "pos" ? (
             <p className="truncate text-sm font-medium text-white/70">
-              {activePanel === "transactions"
-                ? "Transaction"
-                : activePanel === "stock"
-                  ? "Stock inventory"
-                  : "Restock"}
+              {activePanel === "stock" ? "Stock inventory" : "Restock"}
             </p>
           ) : null}
         </header>
@@ -826,7 +822,6 @@ export function PosClient({
                 </p>
                 {(
                   [
-                    ["transactions", "Transaction"],
                     ["stock", "Stock inventory"],
                     ["restock", "Restock"],
                   ] as const
@@ -1445,10 +1440,10 @@ export function PosClient({
           <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-100 p-2 sm:p-4">
             <SalePurchaseTransactions
               store={inventoryStore}
-              tabs={["transactions", "stock", "restock"]}
+              tabs={["stock", "restock"]}
               activeTab={activePanel}
               onTabChange={(tab) => {
-                if (tab === "transactions" || tab === "stock" || tab === "restock") {
+                if (tab === "stock" || tab === "restock") {
                   setActivePanel(tab);
                 }
               }}
