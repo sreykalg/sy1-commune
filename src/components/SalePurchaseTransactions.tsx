@@ -161,6 +161,7 @@ type RestockRecord = {
 
 type UsageRecord = {
   id: string;
+  orderId?: string;
   date: string;
   itemName: string;
   usedAmount: number;
@@ -428,7 +429,8 @@ export function SalePurchaseTransactions({
         tx.date,
         true,
       );
-      await persistInventoryAndUsage(nextStocks, nextUsages);
+      const usagesWithoutTransaction = nextUsages.filter((usage) => usage.orderId !== id);
+      await persistInventoryAndUsage(nextStocks, usagesWithoutTransaction);
     }
     setTransactions((current) => current.filter((t) => t.id !== id));
     await deleteAdminRecord("order", id);
@@ -611,12 +613,6 @@ export function SalePurchaseTransactions({
     setEditCostingId(c.id);
     setCostingProduct(c.productName);
     setCostingIngs(c.ingredients);
-  };
-
-  const handleDeleteUsage = async (id: string) => {
-    const nextUsages = usages.filter((usage) => usage.id !== id);
-    setUsages(nextUsages);
-    await deleteAdminRecord("usage", id);
   };
 
   const handleDeleteCosting = async (id: string) => {
@@ -1104,12 +1100,11 @@ export function SalePurchaseTransactions({
                   <th className="p-3 border-r border-white/15 text-right">Used Amount</th>
                   <th className="p-3 border-r border-white/15 text-right">Remaining</th>
                   <th className="p-3 text-center">Unit</th>
-        <th className="p-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsages.length === 0 ? (
-                  <tr><td colSpan={7} className="p-4 text-center text-neutral-500 text-xs">No usage records found.</td></tr>
+                  <tr><td colSpan={6} className="p-4 text-center text-neutral-500 text-xs">No usage records found.</td></tr>
                 ) : (
                   filteredUsages.map((u, index) => (
                     <tr key={`${u.id}-${index}`} className="border-b border-neutral-200 text-xs">
@@ -1118,14 +1113,8 @@ export function SalePurchaseTransactions({
                       <td className="p-3 border-r border-neutral-200 text-neutral-600">{u.soldAs || "—"}</td>
                       <td className="p-3 border-r border-neutral-200 text-right font-bold text-red-600">-{formatQty(u.usedAmount)}</td>
                       <td className="p-3 border-r border-neutral-200 text-right font-semibold">{formatQty(u.remaining)}</td>
-  <td className="p-3 text-center text-neutral-600">{u.unit}</td>
-  <td className="p-3 text-center">
-    <RowActions
-      deleteLabel={`Delete ${u.itemName} usage record`}
-      onDelete={() => void handleDeleteUsage(u.id)}
-    />
-  </td>
-  </tr>
+                      <td className="p-3 text-center text-neutral-600">{u.unit}</td>
+                    </tr>
                   ))
                 )}
               </tbody>
