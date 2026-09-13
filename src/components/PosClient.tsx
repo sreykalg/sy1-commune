@@ -4,12 +4,30 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/actions/auth";
 import { punchBaristaShift } from "@/actions/users";
-import { createOrder, openPos, requestVoidApproval, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
+import {
+  beginPrintJob,
+  createOrder,
+  finishPrintJob,
+  openPos,
+  queueReprintJobs,
+  requestVoidApproval,
+  verifyManager,
+  voidCheckout,
+  voidOrder,
+} from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
+import {
+  SalePurchaseTransactions,
+  type InventoryTab,
+} from "@/components/SalePurchaseTransactions";
 import { drinkStyleLabel, formatMoney, normalizeMenuStyles } from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
-import { drinkReceipts, nextTicketNo, type ReceiptTicket } from "@/lib/escpos";
+import {
+  receiptFromOrder,
+  type ReceiptTicket,
+} from "@/lib/escpos";
+import { useLabelPrinter } from "@/lib/label-printer";
 import { useReceiptPrinter } from "@/lib/receipt-printer";
 import type {
   DrinkStyle,
@@ -17,9 +35,13 @@ import type {
   Order,
   OrderItem,
   PaymentMethod,
+  PrintJob,
+  PrintJobType,
   PosState,
   Promotion,
   Session,
+  StoreData,
+  VoidRequest,
 } from "@/lib/types";
 
 type PosClientProps = {
@@ -30,11 +52,20 @@ type PosClientProps = {
   promotions: Promotion[];
   orders: Order[];
   clockedInBaristas: { id: string; name: string; username: string }[];
+  printJobs: PrintJob[];
+  voidRequests: VoidRequest[];
+  inventoryStore: Pick<
+    StoreData,
+    "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
+  >;
 };
+
+type PosPanel = "pos" | Extract<InventoryTab, "stock" | "restock">;
 
 const CASH_PRESETS = [500, 1000, 2000];
 const CHECKOUT_KEY = "commune_pos_checkout";
 const TEST_PRINTER_ENABLED = process.env.NEXT_PUBLIC_TEST_PRINTER === "true";
+const PROMOTIONS_ENABLED = false;
 
 type SavedCheckout = {
   userId: string;
@@ -42,6 +73,7 @@ type SavedCheckout = {
   tendered: string;
   paymentMethod: PaymentMethod;
   promoId: string | null;
+  voidRequestId: string | null;
 };
 
 function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
@@ -75,6 +107,8 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
       tendered: typeof saved.tendered === "string" ? saved.tendered : "",
       paymentMethod: parsePayment(saved.paymentMethod),
       promoId: typeof saved.promoId === "string" ? saved.promoId : null,
+      voidRequestId:
+        typeof saved.voidRequestId === "string" ? saved.voidRequestId : null,
     };
   } catch {
     return null;
@@ -93,7 +127,11 @@ export function PosClient({
   promotions,
   orders,
   clockedInBaristas,
+  printJobs,
+  voidRequests,
+  inventoryStore,
 }: PosClientProps) {
+  const router = useRouter();
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -106,11 +144,14 @@ export function PosClient({
   const [voidTargetId, setVoidTargetId] = useState<string | null>(null);
   const [voidSearch, setVoidSearch] = useState("");
   const [voidTodayOnly, setVoidTodayOnly] = useState(true);
+  const [activeVoidRequestId, setActiveVoidRequestId] = useState<string | null>(null);
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoId, setPromoId] = useState<string | null>(null);
-  const [previewTicket, setPreviewTicket] = useState<ReceiptTicket | null>(null);
+  const [printOrderId, setPrintOrderId] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<ReceiptTicket | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [lastOrder, setLastOrder] = useState<Order | null>(null);
+  const [localPrintJobs, setLocalPrintJobs] = useState<PrintJob[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [baristaModalOpen, setBaristaModalOpen] = useState(false);
   const [baristaUsername, setBaristaUsername] = useState("");
@@ -118,10 +159,35 @@ export function PosClient({
   const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
   const [stylePick, setStylePick] = useState<MenuItem | null>(null);
   const [pending, startTransition] = useTransition();
-  const router = useRouter();
-  const printer = useReceiptPrinter();
+  const labelPrinter = useLabelPrinter();
+  const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
-  const activePromos = promotions.filter((item) => item.active);
+  const [activePanel, setActivePanel] = useState<PosPanel>("pos");
+  const activePromos = PROMOTIONS_ENABLED
+    ? promotions.filter((item) => item.active)
+    : [];
+  const appliedPromoId = PROMOTIONS_ENABLED ? promoId : null;
+  const availableOrders = useMemo(() => {
+    const byId = new Map(orders.map((order) => [order.id, order]));
+    if (lastOrder) byId.set(lastOrder.id, lastOrder);
+    return [...byId.values()]
+      .filter((order) => !order.voided)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [lastOrder, orders]);
+  const knownPrintJobs = useMemo(() => {
+    const byId = new Map(printJobs.map((job) => [job.id, job]));
+    for (const job of localPrintJobs) byId.set(job.id, job);
+    return [...byId.values()];
+  }, [localPrintJobs, printJobs]);
+  const selectedPrintOrder = availableOrders.find(
+    (order) => order.id === printOrderId,
+  );
+  const selectedPrintTicket = selectedPrintOrder
+    ? receiptFromOrder(selectedPrintOrder, availableOrders, menu)
+    : null;
+  const selectedPrintJobs = selectedPrintOrder
+    ? knownPrintJobs.filter((job) => job.orderId === selectedPrintOrder.id)
+    : [];
 
   // Helper function to normalize category strings (combines "Non Coffee" and "Non-Coffee")
   const normalizeCat = (catName: string) => catName.replace(/^non\s*coffee$/i, "Non-Coffee");
@@ -153,14 +219,22 @@ export function PosClient({
   }, [menu, category, query]);
 
   useEffect(() => {
-    const saved = readCheckout(session.userId, menu);
-    if (saved) {
-      setCart(saved.cart);
-      setTendered(saved.tendered);
-      setPaymentMethod(saved.paymentMethod);
-      setPromoId(saved.promoId);
-    }
-    setCheckoutReady(true);
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      const saved = readCheckout(session.userId, menu);
+      if (saved) {
+        setCart(saved.cart);
+        setTendered(saved.tendered);
+        setPaymentMethod(saved.paymentMethod);
+        setPromoId(PROMOTIONS_ENABLED ? saved.promoId : null);
+        setActiveVoidRequestId(saved.voidRequestId);
+      }
+      setCheckoutReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [session.userId, menu]);
 
   useEffect(() => {
@@ -170,14 +244,26 @@ export function PosClient({
       cart,
       tendered,
       paymentMethod,
-      promoId,
+      promoId: appliedPromoId,
+      voidRequestId: activeVoidRequestId,
     });
-  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, promoId]);
+  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, appliedPromoId, activeVoidRequestId]);
 
   useEffect(() => {
-    if (promoId && !promotions.some((item) => item.id === promoId && item.active)) {
-      setPromoId(null);
+    if (
+      !promoId ||
+      (PROMOTIONS_ENABLED &&
+        promotions.some((item) => item.id === promoId && item.active))
+    ) {
+      return;
     }
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) setPromoId(null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [promoId, promotions]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -214,10 +300,47 @@ export function PosClient({
   }, [orders, voidSearch, voidTodayOnly]);
   const selectedVoidOrder = orders.find((order) => order.id === voidTargetId);
   const cashierPaidVoid = !isManager && cart.length === 0 ? lastOrderId : null;
-  const canCharge = !isManager && pos.isOpen && cart.length > 0 && (!isCash || paid >= total);
+  const activeVoidRequest = voidRequests.find(
+    (request) => request.id === activeVoidRequestId,
+  );
+  const voidRequestPending =
+    Boolean(activeVoidRequestId) && activeVoidRequest?.status !== "approved";
+  const canCharge =
+    !isManager &&
+    !voidRequestPending &&
+    pos.isOpen &&
+    cart.length > 0 &&
+    (!isCash || paid >= total);
+
+  useEffect(() => {
+    if (!activeVoidRequestId || activeVoidRequest?.status === "approved") return;
+    const refreshTimer = window.setInterval(() => router.refresh(), 3000);
+    return () => window.clearInterval(refreshTimer);
+  }, [activeVoidRequest?.status, activeVoidRequestId, router]);
+
+  useEffect(() => {
+    if (!activeVoidRequestId || activeVoidRequest?.status !== "approved") return;
+    if (activeVoidRequest.orderId) {
+      if (lastOrderId === activeVoidRequest.orderId) {
+        setLastOrderId(null);
+        setLastTicket(null);
+        setLastOrder(null);
+      }
+    } else {
+      setCart([]);
+      setTendered("");
+      setPaymentMethod("cash");
+      setPromoId(null);
+      setPromoOpen(false);
+    }
+    setActiveVoidRequestId(null);
+    setVoidTargetId(null);
+    setVoidReason("");
+    setMessage("Admin approved the void. The checkout has been voided.");
+  }, [activeVoidRequest, activeVoidRequestId, lastOrderId]);
 
   function addItem(id: string, name: string, price: number, style?: DrinkStyle) {
-    if (!pos.isOpen || isManager) {
+    if (!pos.isOpen || isManager || voidRequestPending) {
       return;
     }
     setCart((current) => {
@@ -282,7 +405,7 @@ export function PosClient({
           voidReason,
           voidUsername,
           voidPassword,
-          promoId,
+          appliedPromoId,
           paymentMethod,
         );
         if ("error" in result && result.error) {
@@ -319,6 +442,7 @@ export function PosClient({
       setPromoOpen(false);
       setLastOrderId(null);
       setLastTicket(null);
+      setLastOrder(null);
       setVoidUsername("");
       setVoidPassword("");
       setVoidReason("");
@@ -328,89 +452,167 @@ export function PosClient({
     });
   }
 
-  function handleRequestAdmin() {
+  function handleRequestVoid() {
     if (!voidReason.trim()) {
       setMessage("Enter a reason for voiding.");
       return;
     }
+    const targetId = voidTargetId || (cart.length === 0 ? lastOrderId : null);
+    if (cart.length === 0 && !targetId) {
+      setMessage("No items to void.");
+      return;
+    }
 
     startTransition(async () => {
-      const result = await requestVoidApproval({
-        reason: voidReason,
-        orderId: cart.length > 0 ? null : voidTargetId || lastOrderId,
-        cart: cart.length > 0 ? cart : undefined,
-        promoId,
+      const result = await requestVoidApproval(
+        cart,
+        voidReason,
+        targetId,
+        appliedPromoId,
         paymentMethod,
-      });
-      if (result && "error" in result && result.error) {
-        setMessage(result.error);
+      );
+      if (!result.requestId) {
+        setMessage(result.error ?? "Unable to send the void request.");
         return;
       }
-      if (cart.length > 0) {
-        setCart([]);
-        setTendered("");
-        setPaymentMethod("cash");
-        setPromoId(null);
-        setPromoOpen(false);
-      }
+      setActiveVoidRequestId(result.requestId);
       setVoidUsername("");
       setVoidPassword("");
-      setVoidReason("");
-      setVoidTargetId(null);
       setVoidModalOpen(false);
-      setMessage("Void request sent to admin.");
+      setMessage("Void request sent to admin. Waiting for approval.");
     });
   }
 
-  function currentTicket(): ReceiptTicket {
+  function printTicket() {
+    const order =
+      (lastOrderId
+        ? availableOrders.find((entry) => entry.id === lastOrderId)
+        : undefined) ?? availableOrders[0];
+    if (!order) {
+      setMessage("Complete an order before opening the print flow.");
+      return;
+    }
+    setPrintOrderId(order.id);
+  }
+
+  function upsertPrintJobs(updated: PrintJob[]) {
+    setLocalPrintJobs((current) => {
+      const byId = new Map(current.map((job) => [job.id, job]));
+      for (const job of updated) byId.set(job.id, job);
+      return [...byId.values()];
+    });
+  }
+
+  function labelTicketForJob(order: Order, job: PrintJob): ReceiptTicket {
+    const ticket = receiptFromOrder(order, availableOrders, menu);
+    const source = job.label
+      ? order.items[job.label.itemIndex]
+      : undefined;
+    if (!job.label) return { ...ticket, items: [] };
     return {
-      ticketNo: nextTicketNo(orders),
-      barista: session.name,
-      items: cart.map((item) => ({
-        ...item,
-        name: item.style ? `${item.name} · ${drinkStyleLabel(item.style)}` : item.name,
-        category: menu.find((menuItem) => menuItem.id === item.productId)?.category,
-      })),
-      subtotal,
-      discount,
-      promoLabel: promo?.label,
-      total,
-      paymentMethod,
-      paid,
-      change,
-      at: new Date(),
+      ...ticket,
+      items: [
+        {
+          productId: job.label.productId,
+          name: job.label.name,
+          price: job.label.price,
+          qty: 1,
+          category: source?.category,
+        },
+      ],
     };
   }
 
-  function printTicket() {
-    if (cart.length > 0) {
-      const ticket = currentTicket();
-      if (drinkReceipts(ticket).length === 0) {
-        setMessage("Add drinks before printing.");
-        return;
+  async function attemptPrintJob(job: PrintJob, order: Order): Promise<PrintJob> {
+    const started = await beginPrintJob(job.id);
+    if ("error" in started) throw new Error(started.error);
+    upsertPrintJobs([started.job]);
+
+    let failure: string | undefined;
+    try {
+      if (job.type === "cup-label") {
+        if (!labelPrinter.supported) {
+          throw new Error("Web Serial is unavailable for the label printer.");
+        }
+        if (!labelPrinter.connected) {
+          throw new Error("Label printer is disconnected.");
+        }
+        await labelPrinter.printLabel(labelTicketForJob(order, job));
+      } else {
+        if (!receiptPrinter.supported) {
+          throw new Error("Web Serial is unavailable for the receipt printer.");
+        }
+        if (!receiptPrinter.connected) {
+          throw new Error("Receipt printer is disconnected.");
+        }
+        await receiptPrinter.printReceipt(
+          receiptFromOrder(order, availableOrders, menu),
+        );
       }
-      setPreviewTicket(ticket);
-      return;
+    } catch (error) {
+      failure = error instanceof Error ? error.message : "Printer failed.";
     }
-    if (lastTicket) {
-      if (drinkReceipts(lastTicket).length === 0) {
-        setMessage("The last order has no drinks to print.");
-        return;
-      }
-      setPreviewTicket(lastTicket);
-      return;
-    }
-    setMessage("Add items before printing.");
+
+    const finished = await finishPrintJob(
+      job.id,
+      failure ? "failed" : "printed",
+      failure,
+    );
+    if ("error" in finished) throw new Error(finished.error);
+    upsertPrintJobs([finished.job]);
+    return finished.job;
   }
 
-  async function sendSlips(ticket: ReceiptTicket) {
-    if (!printer.supported) {
-      throw new Error("Open the POS in Chrome or Edge to use the receipt printer.");
+  async function attemptPrintJobs(jobs: PrintJob[], order: Order) {
+    const results: PrintJob[] = [];
+    for (const job of jobs) {
+      try {
+        results.push(await attemptPrintJob(job, order));
+      } catch {
+        results.push({
+          ...job,
+          status: "failed",
+          lastError: "Could not record the print attempt.",
+        });
+      }
     }
-    if (!printer.connected) {
-      throw new Error("Connect the receipt printer first.");
+    return results;
+  }
+
+  function printSummary(results: PrintJob[]): string {
+    const printed = results.filter((job) => job.status === "printed").length;
+    const failed = results.length - printed;
+    if (failed === 0) return `${printed} printed`;
+    if (printed === 0) return `${failed} waiting for retry`;
+    return `${printed} printed, ${failed} waiting for retry`;
+  }
+
+  async function printTypeForOrder(order: Order, type: PrintJobType) {
+    let jobs = knownPrintJobs.filter(
+      (job) =>
+        job.orderId === order.id &&
+        job.type === type &&
+        (job.status === "pending" || job.status === "failed"),
+    );
+    if (jobs.length === 0) {
+      const queued = await queueReprintJobs(order.id, type);
+      if ("error" in queued) throw new Error(queued.error);
+      jobs = queued.printJobs;
+      upsertPrintJobs(jobs);
     }
-    await printer.print(ticket);
+    const results = await attemptPrintJobs(jobs, order);
+    setMessage(
+      `${type === "cup-label" ? "Cup labels" : "Customer receipt"}: ${printSummary(results)}.`,
+    );
+  }
+
+  async function retrySingleJob(job: PrintJob) {
+    const order = availableOrders.find((entry) => entry.id === job.orderId);
+    if (!order) throw new Error("Completed order not found.");
+    const result = await attemptPrintJob(job, order);
+    setMessage(
+      `${job.type === "cup-label" ? "Cup label" : "Customer receipt"}: ${result.status}.`,
+    );
   }
 
   return (
@@ -450,27 +652,51 @@ export function PosClient({
             </button>
             <button
               type="button"
-              disabled={pending || !printer.supported}
+              disabled={pending || !labelPrinter.supported}
               onClick={() =>
                 startTransition(async () => {
                   try {
-                    if (printer.connected) {
-                      await printer.disconnect();
-                      setMessage("Printer disconnected.");
+                    if (labelPrinter.connected) {
+                      await labelPrinter.disconnect();
+                      setMessage("Label printer disconnected.");
                       return;
                     }
-                    await printer.connect();
-                    setMessage("Printer connected.");
+                    await labelPrinter.connect();
+                    setMessage("Label printer connected.");
                   } catch (error) {
                     setMessage(
-                      error instanceof Error ? error.message : "Printer error.",
+                      error instanceof Error ? error.message : "Label printer error.",
                     );
                   }
                 })
               }
               className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
             >
-              {printer.connected ? "Printer on" : "Connect printer"}
+              {labelPrinter.connected ? "Labels on" : "Connect labels"}
+            </button>
+            <button
+              type="button"
+              disabled={pending || !receiptPrinter.supported}
+              onClick={() =>
+                startTransition(async () => {
+                  try {
+                    if (receiptPrinter.connected) {
+                      await receiptPrinter.disconnect();
+                      setMessage("Receipt printer disconnected.");
+                      return;
+                    }
+                    await receiptPrinter.connect();
+                    setMessage("Receipt printer connected.");
+                  } catch (error) {
+                    setMessage(
+                      error instanceof Error ? error.message : "Receipt printer error.",
+                    );
+                  }
+                })
+              }
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
+            >
+              {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
             </button>
             <button
               type="button"
@@ -634,6 +860,26 @@ export function PosClient({
           </div>
         ) : null}
 
+        {!isManager ? (
+          <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-neutral-200 bg-white px-4 py-2">
+            {(["pos", "stock", "restock"] as const).map((panel) => (
+              <button
+                key={panel}
+                type="button"
+                onClick={() => setActivePanel(panel)}
+                aria-current={activePanel === panel ? "page" : undefined}
+                className={`shrink-0 rounded-lg px-4 py-1.5 text-xs font-bold uppercase transition ${
+                  activePanel === panel
+                    ? "bg-black text-white"
+                    : "border border-neutral-200 bg-white text-neutral-700 hover:border-black"
+                }`}
+              >
+                {panel === "pos" ? "Transactions" : panel === "stock" ? "Stock Inventory" : "Restock"}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
         {/* Void Modal */}
         {voidModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -669,7 +915,7 @@ export function PosClient({
                 <p className="mt-1 text-xs text-neutral-500">
                   {isManager
                     ? "This cannot be undone."
-                    : "Ask a manager, or send a request to admin."}
+                    : "Manager approval required to void."}
                 </p>
               </div>
 
@@ -749,56 +995,88 @@ export function PosClient({
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setVoidModalOpen(false)}
-                    className="w-1/3 rounded-xl border border-neutral-200 py-2.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="w-2/3 rounded-xl bg-black py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99]"
-                  >
-                    {isManager ? "Void ticket" : "Confirm Void"}
-                  </button>
-                </div>
-                {!isManager ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={handleRequestAdmin}
-                    className="rounded-xl border border-neutral-300 py-2.5 text-xs font-medium text-neutral-700 transition hover:border-black hover:text-black disabled:opacity-40"
-                  >
-                    Request admin
-                  </button>
-                ) : null}
+              <div className="mt-6 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVoidModalOpen(false)}
+                  className="w-1/3 rounded-xl border border-neutral-200 py-2.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending || voidRequestPending}
+                  className="w-2/3 rounded-xl bg-black py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99]"
+                >
+                  {isManager ? "Void ticket" : "Confirm Void"}
+                </button>
               </div>
+              {!isManager ? (
+                <button
+                  type="button"
+                  disabled={pending || voidRequestPending}
+                  onClick={handleRequestVoid}
+                  className="mt-2 w-full rounded-xl border border-black py-2.5 text-xs font-medium text-black transition hover:bg-neutral-100 disabled:opacity-40"
+                >
+                  {voidRequestPending ? "Waiting for admin approval" : "Request to admin"}
+                </button>
+              ) : null}
             </form>
           </div>
         ) : null}
 
-        {previewTicket ? (
+        {selectedPrintTicket && selectedPrintOrder ? (
           <ReceiptPreview
-            ticket={previewTicket}
-            paperWidth={printer.paperWidth}
-            printerReady={printer.connected}
+            ticket={selectedPrintTicket}
+            orderId={selectedPrintOrder.id}
+            orderOptions={availableOrders.map((order) => ({
+              id: order.id,
+              label: `#${order.ticketNo ?? order.id.slice(-4)} · ${phDateTimeLabel(order.createdAt)} · ${formatMoney(order.total)}`,
+            }))}
+            printJobs={selectedPrintJobs}
+            labelPaperWidth={labelPrinter.paperWidth}
+            receiptPaperWidth={receiptPrinter.paperWidth}
+            labelBaudRate={labelPrinter.baudRate}
+            receiptBaudRate={receiptPrinter.baudRate}
+            labelPrinterReady={labelPrinter.connected}
+            receiptPrinterReady={receiptPrinter.connected}
             testPrinterEnabled={TEST_PRINTER_ENABLED}
             pending={pending}
-            onClose={() => setPreviewTicket(null)}
-            onPrint={() =>
+            onClose={() => setPrintOrderId(null)}
+            onSelectOrder={setPrintOrderId}
+            onSetLabelPaperWidth={labelPrinter.setPaperWidth}
+            onSetReceiptPaperWidth={receiptPrinter.setPaperWidth}
+            onSetLabelBaudRate={labelPrinter.setBaudRate}
+            onSetReceiptBaudRate={receiptPrinter.setBaudRate}
+            onPrintLabels={() =>
               startTransition(async () => {
                 try {
-                  await sendSlips(previewTicket);
-                  setMessage("Drink receipts sent.");
-                  setPreviewTicket(null);
+                  await printTypeForOrder(selectedPrintOrder, "cup-label");
                 } catch (error) {
                   setMessage(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not print receipt.",
+                    error instanceof Error ? error.message : "Could not print labels.",
+                  );
+                }
+              })
+            }
+            onPrintReceipt={() =>
+              startTransition(async () => {
+                try {
+                  await printTypeForOrder(selectedPrintOrder, "customer-receipt");
+                } catch (error) {
+                  setMessage(
+                    error instanceof Error ? error.message : "Could not print receipt.",
+                  );
+                }
+              })
+            }
+            onRetryJob={(job) =>
+              startTransition(async () => {
+                try {
+                  await retrySingleJob(job);
+                } catch (error) {
+                  setMessage(
+                    error instanceof Error ? error.message : "Could not retry print job.",
                   );
                 }
               })
@@ -806,6 +1084,19 @@ export function PosClient({
           />
         ) : null}
 
+        {!isManager && activePanel !== "pos" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-100 p-2 sm:p-4">
+            <SalePurchaseTransactions
+              store={inventoryStore}
+              tabs={["stock", "restock"]}
+              activeTab={activePanel}
+              onTabChange={(tab) => {
+                if (tab === "stock" || tab === "restock") setActivePanel(tab);
+              }}
+              showTabs={false}
+            />
+          </div>
+        ) : (
         <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
           {!pos.isOpen ? (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-neutral-100 px-6 text-center">
@@ -1006,7 +1297,7 @@ export function PosClient({
                       key={item.id}
                       type="button"
                       onClick={() => handleMenuTap(item)}
-                      disabled={isManager}
+                      disabled={isManager || voidRequestPending}
                       className="rounded-2xl border border-neutral-300 bg-white p-3 text-center transition hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <p className="text-xs font-medium">{item.name}</p>
@@ -1162,7 +1453,7 @@ export function PosClient({
                 <span>{formatMoney(isCash ? change : total)}</span>
               </div>
 
-              {promoOpen ? (
+              {PROMOTIONS_ENABLED && promoOpen ? (
                 <div className="grid grid-cols-2 gap-1.5">
                   {activePromos.length === 0 ? (
                     <p className="col-span-2 text-center text-[11px] text-neutral-500">
@@ -1189,23 +1480,29 @@ export function PosClient({
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPromoOpen((value) => !value)}
-                  className={`rounded-lg border py-2 text-xs transition ${
-                    promoId
-                      ? "border-black bg-black text-white"
-                      : "border-neutral-300 hover:border-black"
-                  }`}
-                >
-                  Promotions
-                </button>
+              <div
+                className={`grid gap-1.5 pt-1 ${
+                  PROMOTIONS_ENABLED ? "grid-cols-3" : "grid-cols-2"
+                }`}
+              >
+                {PROMOTIONS_ENABLED ? (
+                  <button
+                    type="button"
+                    onClick={() => setPromoOpen((value) => !value)}
+                    className={`rounded-lg border py-2 text-xs transition ${
+                      promoId
+                        ? "border-black bg-black text-white"
+                        : "border-neutral-300 hover:border-black"
+                    }`}
+                  >
+                    Promotions
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={printTicket}
                   className={`rounded-lg border py-2 text-xs transition ${
-                    printer.connected || lastTicket || cart.length > 0
+                    labelPrinter.connected || receiptPrinter.connected || availableOrders.length > 0
                       ? "border-black bg-black text-white"
                       : "border-neutral-300 hover:border-black"
                   }`}
@@ -1218,7 +1515,7 @@ export function PosClient({
                     setVoidTargetId(cart.length === 0 ? lastOrderId : null);
                     setVoidModalOpen(true);
                   }}
-                  disabled={cart.length === 0 && !lastOrderId}
+                  disabled={voidRequestPending || (cart.length === 0 && !lastOrderId)}
                   className="rounded-lg border border-neutral-300 py-2 text-xs hover:border-black disabled:opacity-40 transition"
                 >
                   Void
@@ -1230,50 +1527,43 @@ export function PosClient({
                 disabled={pending || !canCharge}
                 onClick={() =>
                   startTransition(async () => {
-                    const ticket = currentTicket();
                     const result = await createOrder(
                       cart,
-                      promoId,
+                      appliedPromoId,
                       paymentMethod,
                       paid,
                     );
-                    if (result.error) {
+                    if (!result.ok) {
                       setMessage(result.error);
                       return;
                     }
-                    const saved: ReceiptTicket = {
-                      ...ticket,
-                      ticketNo: result.ticketNo || ticket.ticketNo,
-                    };
+                    const savedOrder = result.order;
+                    const saved = receiptFromOrder(
+                      savedOrder,
+                      [savedOrder, ...availableOrders],
+                      menu,
+                    );
                     setLastTicket(saved);
-                    setLastOrderId(result.id ?? null);
+                    setLastOrder(savedOrder);
+                    setLastOrderId(savedOrder.id);
+                    upsertPrintJobs(result.printJobs);
                     setCart([]);
                     setTendered("");
                     setPaymentMethod("cash");
                     setPromoId(null);
                     setPromoOpen(false);
-                    const receiptCount = drinkReceipts(saved).length;
-                    if (printer.connected && receiptCount > 0) {
-                      try {
-                        await printer.print(saved);
-                        setMessage(
-                          `Paid ${formatMoney(result.total ?? 0)} · ${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"} printed · tap Print to reprint`,
-                        );
-                      } catch {
-                        setMessage(
-                          `Paid ${formatMoney(result.total ?? 0)} · printer failed · tap Print`,
-                        );
-                      }
-                      return;
-                    }
-                    if (receiptCount === 0) {
-                      setMessage(
-                        `Paid ${formatMoney(result.total ?? 0)} · no drinks to print`,
-                      );
-                      return;
-                    }
+                    const labelJobs = result.printJobs.filter(
+                      (job) => job.type === "cup-label",
+                    );
+                    const receiptJobs = result.printJobs.filter(
+                      (job) => job.type === "customer-receipt",
+                    );
+                    const [labelResults, receiptResults] = await Promise.all([
+                      attemptPrintJobs(labelJobs, savedOrder),
+                      attemptPrintJobs(receiptJobs, savedOrder),
+                    ]);
                     setMessage(
-                      `Paid ${formatMoney(result.total ?? 0)} · tap Print for last receipt`,
+                      `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
                     );
                   })
                 }
@@ -1285,11 +1575,17 @@ export function PosClient({
               {message ? (
                 <p className="text-center text-xs text-neutral-500">{message}</p>
               ) : null}
+              {voidRequestPending ? (
+                <p className="rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-center text-xs font-medium text-neutral-700">
+                  Void request pending admin approval
+                </p>
+              ) : null}
             </div>
           </aside>
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

@@ -148,6 +148,7 @@ function emptyStore(): StoreData {
   return {
     pos: { isOpen: false, openedAt: null, openedBy: null },
     orders: seedOrders(),
+    printJobs: [],
     menu: DEFAULT_MENU.map((item) => ({ ...item })),
     categories: [...MENU_CATEGORIES],
     promotions: DEFAULT_PROMOS.map((item) => ({ ...item })),
@@ -221,15 +222,38 @@ function uniqueCategories(values: string[]): string[] {
 }
 
 function normalizeStore(store: StoreData): StoreData {
+  const categoryByProduct = new Map(
+    (Array.isArray(store.menu) ? store.menu : []).map((item) => [
+      item.id,
+      item.category,
+    ]),
+  );
   if (!Array.isArray(store.orders)) {
     store.orders = [];
   } else {
     store.orders = store.orders.map((order: Order) => ({
       ...order,
+      items: Array.isArray(order.items)
+        ? order.items.map((item) => ({
+            ...item,
+            category: item.category ?? categoryByProduct.get(item.productId),
+          }))
+        : [],
       paymentMethod: parsePayment(order.paymentMethod),
       voided: Boolean(order.voided),
       voidReason: typeof order.voidReason === "string" ? order.voidReason : "",
     }));
+  }
+  if (!Array.isArray(store.printJobs)) {
+    store.printJobs = [];
+  } else {
+    store.printJobs = store.printJobs.filter(
+      (job) =>
+        job &&
+        typeof job.id === "string" &&
+        typeof job.orderId === "string" &&
+        (job.type === "cup-label" || job.type === "customer-receipt"),
+    );
   }
   if (!Array.isArray(store.menu) || store.menu.length === 0) {
     store.menu = DEFAULT_MENU.map((item) => ({ ...item }));
@@ -290,6 +314,14 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.voidRequests)) {
     store.voidRequests = [];
+  } else {
+    store.voidRequests = store.voidRequests.filter(
+      (request) =>
+        request &&
+        typeof request.id === "string" &&
+        (request.status === "pending" || request.status === "approved") &&
+        Array.isArray(request.items),
+    );
   }
   store.loginGates = normalizeLoginGates(store.loginGates);
 
@@ -479,4 +511,3 @@ export async function recordAuthActivity(entry: {
     }
   });
 }
-

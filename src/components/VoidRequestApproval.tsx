@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteVoidRequest, setVoidRequestStatus } from "@/actions/pos";
+import { approveVoidRequest } from "@/actions/pos";
 import { formatMoney } from "@/lib/menu";
 import { phDateTimeLabel } from "@/lib/datetime";
 import type { VoidRequest } from "@/lib/types";
 
 function ticketLabel(request: VoidRequest) {
-  if (request.ticketNo) return `#${request.ticketNo}`;
-  return request.kind === "checkout" ? "Checkout" : "—";
+  if (request.orderId) return request.orderId.slice(-6);
+  return "Checkout";
 }
 
 function RequestActions({
@@ -31,7 +31,7 @@ function RequestActions({
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                const result = await setVoidRequestStatus(request.id, "approved");
+                const result = await approveVoidRequest(request.id);
                 if (result && "error" in result && result.error) {
                   onNotice(result.error);
                   return;
@@ -43,40 +43,8 @@ function RequestActions({
           >
             Approve
           </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await setVoidRequestStatus(request.id, "denied");
-                if (result && "error" in result && result.error) {
-                  onNotice(result.error);
-                  return;
-                }
-                onNotice("Void request denied.");
-              })
-            }
-            className="rounded-full border border-neutral-300 px-3 py-2 text-xs font-medium hover:border-black disabled:opacity-40"
-          >
-            Deny
-          </button>
         </>
       ) : null}
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            await deleteVoidRequest(request.id);
-            onNotice("Request removed.");
-          })
-        }
-        className={`rounded-full border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40 ${
-          request.status === "pending" ? "col-span-2 sm:col-span-1" : "col-span-2"
-        }`}
-      >
-        Delete
-      </button>
     </div>
   );
 }
@@ -84,7 +52,7 @@ function RequestActions({
 export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const rows = [...requests].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const rows = [...requests].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 
   return (
     <div className="min-h-screen min-w-0 space-y-6 rounded-none border-0 border-neutral-300 bg-white p-3 sm:rounded-xl sm:border sm:p-6">
@@ -104,9 +72,9 @@ export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
               <article key={request.id} className="rounded-2xl border border-neutral-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{request.cashierName}</p>
+                    <p className="text-sm font-medium">{request.requestedByName}</p>
                     <p className="mt-0.5 text-xs text-neutral-500">
-                      {phDateTimeLabel(request.createdAt)} · {ticketLabel(request)}
+                      {phDateTimeLabel(request.requestedAt)} · {ticketLabel(request)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -148,9 +116,9 @@ export function VoidRequestApproval({ requests }: { requests: VoidRequest[] }) {
                 {rows.map((request) => (
                   <tr key={request.id} className="border-t border-neutral-100">
                     <td className="px-4 py-3 whitespace-nowrap text-neutral-600">
-                      {phDateTimeLabel(request.createdAt)}
+                      {phDateTimeLabel(request.requestedAt)}
                     </td>
-                    <td className="px-4 py-3 font-medium">{request.cashierName}</td>
+                    <td className="px-4 py-3 font-medium">{request.requestedByName}</td>
                     <td className="px-4 py-3 text-neutral-600">{ticketLabel(request)}</td>
                     <td className="max-w-[220px] px-4 py-3 text-neutral-600">
                       {request.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}

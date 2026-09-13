@@ -27,6 +27,15 @@ export default async function PosPage() {
         promotions={store.promotions}
         orders={store.orders}
         clockedInBaristas={clockedInBaristas}
+        printJobs={store.printJobs}
+        voidRequests={store.voidRequests}
+        inventoryStore={{
+          orders: store.orders,
+          inventory: store.inventory,
+          usageLogs: store.usageLogs,
+          restocks: store.restocks,
+          costings: store.costings,
+        }}
       />
     </main>
   );

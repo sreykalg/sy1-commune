@@ -25,6 +25,7 @@ export type OrderItem = {
   qty: number;
   price: number;
   style?: DrinkStyle;
+  category?: string;
 };
 
 export type PaymentMethod = "cash" | "gcash" | "maya";
@@ -45,6 +46,30 @@ export type Order = {
   voided?: boolean;
   voidReason?: string;
   recordType?: "Sale" | "Purchase";
+};
+
+export type PrintJobType = "cup-label" | "customer-receipt";
+
+export type PrintJobStatus = "pending" | "printed" | "failed" | "cancelled";
+
+export type PrintJob = {
+  id: string;
+  orderId: string;
+  type: PrintJobType;
+  status: PrintJobStatus;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  printedAt?: string;
+  lastError?: string;
+  label?: {
+    productId: string;
+    name: string;
+    price: number;
+    itemIndex: number;
+    copyIndex: number;
+    copiesForItem: number;
+  };
 };
 
 export type PosState = {
@@ -140,23 +165,27 @@ export type OffRequest = {
 
 export type VoidRequest = {
   id: string;
-  kind: "order" | "checkout";
-  orderId?: string;
-  ticketNo?: string;
-  cashierId: string;
-  cashierName: string;
+  requestedAt: string;
+  requestedById: string;
+  requestedByName: string;
   reason: string;
+  status: "pending" | "approved";
+  orderId?: string;
   items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  promoLabel?: string;
   total: number;
-  promoId?: string | null;
-  paymentMethod?: PaymentMethod;
-  status: "pending" | "approved" | "denied";
-  createdAt: string;
+  paymentMethod: PaymentMethod;
+  approvedAt?: string;
+  approvedByName?: string;
+  processedOrderId?: string;
 };
 
 export type StoreData = {
   pos: PosState;
   orders: Order[];
+  printJobs: PrintJob[];
   menu: MenuItem[];
   categories: string[];
   promotions: Promotion[];

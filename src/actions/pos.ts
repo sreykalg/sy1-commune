@@ -2,13 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { nextTicketNo } from "@/lib/escpos";
+import { isDrinkCategory, nextTicketNo } from "@/lib/escpos";
 import { pricedOrderLine } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { ingredientsForOrderLine, roundQty } from "@/lib/inventory";
 import { canUsePos } from "@/lib/users";
 import { getStore, updateStore } from "@/lib/store";
-import type { OrderItem, StoreData } from "@/lib/types";
+import type {
+  MenuItem,
+  Order,
+  OrderItem,
+  PrintJob,
+  PrintJobStatus,
+  PrintJobType,
+  StoreData,
+} from "@/lib/types";
 
 async function requirePos() {
   const session = await getSession();
@@ -31,6 +39,97 @@ async function requireAdmin() {
   if (!session || session.role !== "admin") {
     throw new Error("Only an admin can change store records.");
   }
+  return session;
+}
+
+async function requireInventoryAccess(hasAdminOnlyData: boolean) {
+  const session = await getSession();
+  if (
+    !session ||
+    (session.role !== "admin" && session.role !== "cashier") ||
+    (session.role === "cashier" && hasAdminOnlyData)
+  ) {
+    throw new Error("You do not have permission to change these store records.");
+  }
+  return session;
+}
+
+function markOrderVoided(store: StoreData, orderId: string, reason: string) {
+  const order = store.orders.find((entry) => entry.id === orderId);
+  if (!order) return "Ticket not found.";
+  if (order.voided) return "Ticket is already voided.";
+
+  order.voided = true;
+  order.voidReason = reason;
+  const updatedAt = new Date().toISOString();
+  for (const job of store.printJobs) {
+    if (
+      job.orderId === orderId &&
+      (job.status === "pending" || job.status === "failed")
+    ) {
+      job.status = "cancelled";
+      job.updatedAt = updatedAt;
+      job.lastError = "Order was voided.";
+    }
+  }
+}
+
+function labelJobsForOrder(
+  order: Order,
+  menu: MenuItem[],
+  idPrefix: string,
+  createdAt: string,
+): PrintJob[] {
+  const categoryByProduct = new Map(menu.map((item) => [item.id, item.category]));
+  let labelIndex = 0;
+
+  return order.items.flatMap((item, itemIndex) => {
+    const category = item.category ?? categoryByProduct.get(item.productId);
+    if (!isDrinkCategory(category)) return [];
+
+    return Array.from({ length: item.qty }, (_, copyIndex) => {
+      labelIndex += 1;
+      return {
+        id: `${idPrefix}-label-${labelIndex}`,
+        orderId: order.id,
+        type: "cup-label" as const,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt,
+        updatedAt: createdAt,
+        label: {
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          itemIndex,
+          copyIndex,
+          copiesForItem: item.qty,
+        },
+      };
+    });
+  });
+}
+
+function initialPrintJobs(order: Order, menu: MenuItem[]): PrintJob[] {
+  const createdAt = order.createdAt;
+  return [
+    ...labelJobsForOrder(order, menu, order.id, createdAt),
+    {
+      id: `${order.id}-receipt`,
+      orderId: order.id,
+      type: "customer-receipt",
+      status: "pending",
+      attempts: 0,
+      createdAt,
+      updatedAt: createdAt,
+    },
+  ];
+}
+
+function reprintId(orderId: string, type: PrintJobType): string {
+  return `${orderId}-${type}-reprint-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 7)}`;
 }
 
 export async function saveAdminData(data: {
@@ -40,7 +139,7 @@ export async function saveAdminData(data: {
   usageLogs?: StoreData["usageLogs"];
   orders?: StoreData["orders"];
 }) {
-  await requireAdmin();
+  await requireInventoryAccess(data.costings !== undefined || data.orders !== undefined);
   await updateStore((store) => {
     if (data.inventory) store.inventory = data.inventory;
     if (data.restocks) store.restocks = data.restocks;
@@ -48,15 +147,17 @@ export async function saveAdminData(data: {
     if (data.usageLogs) store.usageLogs = data.usageLogs;
     if (data.orders) store.orders = data.orders;
   });
+  revalidatePath("/pos");
   revalidatePath("/admin");
   return { ok: true };
 }
 
 export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing", id: string) {
-  await requireAdmin();
+  await requireInventoryAccess(kind === "order" || kind === "costing");
   await updateStore((store) => {
     if (kind === "order") {
       store.orders = store.orders.filter((order) => order.id !== id);
+      store.printJobs = store.printJobs.filter((job) => job.orderId !== id);
       store.usageLogs = store.usageLogs.filter((entry) => entry.orderId !== id);
     } else if (kind === "inventory") {
       store.inventory = store.inventory.filter((item) => item.id !== id);
@@ -66,6 +167,7 @@ export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" 
       store.costings = store.costings.filter((record) => record.id !== id);
     }
   });
+  revalidatePath("/pos");
   revalidatePath("/admin");
   return { ok: true };
 }
@@ -105,7 +207,7 @@ export async function createOrder(
   const session = await requireCashier();
 
   if (cart.length === 0) {
-    return { error: "Add a drink before charging." };
+    return { ok: false as const, error: "Add a drink before charging." };
   }
 
   const priced: OrderItem[] = [];
@@ -113,6 +215,8 @@ export async function createOrder(
   let charged = 0;
   let ticketNo = "";
   let createdId = "";
+  let createdOrder: Order | null = null;
+  let createdPrintJobs: PrintJob[] = [];
 
   await updateStore((store) => {
     if (!store.pos.isOpen) {
@@ -222,7 +326,7 @@ export async function createOrder(
       ...usageByItem.values(),
     ];
 
-    store.orders.push({
+    createdOrder = {
       id: orderId,
       createdAt,
       baristaName: session.name,
@@ -236,14 +340,24 @@ export async function createOrder(
       paid: cashIn,
       change: method === "cash" ? cashIn - total : 0,
       voided: false,
-    });
+    };
+    createdPrintJobs = initialPrintJobs(createdOrder, store.menu);
+    store.orders.push(createdOrder);
+    store.printJobs.push(...createdPrintJobs);
   });
 
-  if (error) return { error };
+  if (error) return { ok: false as const, error };
 
   revalidatePath("/pos");
   revalidatePath("/admin");
-  return { ok: true, total: charged, ticketNo, id: createdId };
+  return {
+    ok: true as const,
+    total: charged,
+    ticketNo,
+    id: createdId,
+    order: createdOrder!,
+    printJobs: createdPrintJobs,
+  };
 }
 
 export async function verifyManager(username: string, password: string) {
@@ -283,13 +397,170 @@ export async function voidOrder(
   let error: string | undefined;
 
   await updateStore((store) => {
-    const order = store.orders.find((entry) => entry.id === orderId);
-    if (!order) {
+    error = markOrderVoided(store, orderId, reason.trim());
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function requestVoidApproval(
+  cart: OrderItem[],
+  reason: string,
+  orderId?: string | null,
+  promoId?: string | null,
+  paymentMethod?: string | null,
+) {
+  const session = await requireCashier();
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { error: "Enter a reason for voiding." };
+
+  let error: string | undefined;
+  let requestId = "";
+
+  await updateStore((store) => {
+    if (
+      store.voidRequests.some(
+        (request) =>
+          request.requestedById === session.userId && request.status === "pending",
+      )
+    ) {
+      error = "You already have a void request waiting for admin approval.";
+      return;
+    }
+
+    const existingOrder = orderId
+      ? store.orders.find((order) => order.id === orderId)
+      : undefined;
+    if (orderId && !existingOrder) {
       error = "Ticket not found.";
       return;
     }
-    order.voided = true;
-    order.voidReason = reason.trim();
+    if (existingOrder?.voided) {
+      error = "Ticket is already voided.";
+      return;
+    }
+
+    let items: OrderItem[] = [];
+    let subtotal = 0;
+    let discount = 0;
+    let promoLabel: string | undefined;
+    let total = 0;
+    let requestedPayment = parsePayment(paymentMethod);
+
+    if (existingOrder) {
+      items = existingOrder.items.map((item) => ({ ...item }));
+      subtotal = existingOrder.subtotal ?? existingOrder.total;
+      discount = existingOrder.discount ?? 0;
+      promoLabel = existingOrder.promoLabel;
+      total = existingOrder.total;
+      requestedPayment = parsePayment(existingOrder.paymentMethod);
+    } else {
+      if (cart.length === 0) {
+        error = "No items to void.";
+        return;
+      }
+      for (const line of cart) {
+        const menuItem = store.menu.find((item) => item.id === line.productId);
+        const qty = Number(line.qty);
+        if (!menuItem) {
+          error = "One of the items is no longer on the menu.";
+          return;
+        }
+        if (!Number.isSafeInteger(qty) || qty < 1 || qty > 99) {
+          error = "Each item quantity must be a whole number from 1 to 99.";
+          return;
+        }
+        items.push(pricedOrderLine(menuItem, { ...line, qty }));
+      }
+      subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const promotion = promoId
+        ? store.promotions.find((entry) => entry.id === promoId && entry.active)
+        : undefined;
+      if (promotion) {
+        promoLabel = promotion.label;
+        discount =
+          promotion.type === "percent"
+            ? Math.round((subtotal * promotion.value) / 100)
+            : Math.min(subtotal, Math.round(promotion.value));
+      }
+      total = Math.max(0, subtotal - discount);
+    }
+
+    requestId = `void-request-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+    store.voidRequests.unshift({
+      id: requestId,
+      requestedAt: new Date().toISOString(),
+      requestedById: session.userId,
+      requestedByName: session.name,
+      reason: trimmedReason,
+      status: "pending",
+      orderId: existingOrder?.id,
+      items,
+      subtotal,
+      discount,
+      promoLabel,
+      total,
+      paymentMethod: requestedPayment,
+    });
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true, requestId };
+}
+
+export async function approveVoidRequest(requestId: string) {
+  const session = await requireAdmin();
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    const request = store.voidRequests.find((entry) => entry.id === requestId);
+    if (!request) {
+      error = "Void request not found.";
+      return;
+    }
+    if (request.status !== "pending") {
+      error = "Void request is already approved.";
+      return;
+    }
+
+    if (request.orderId) {
+      error = markOrderVoided(store, request.orderId, request.reason);
+      if (error) return;
+      request.processedOrderId = request.orderId;
+    } else {
+      const createdAt = new Date().toISOString();
+      const createdId = `ord-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 7)}`;
+      store.orders.push({
+        id: createdId,
+        createdAt,
+        baristaName: request.requestedByName,
+        items: request.items.map((item) => ({ ...item })),
+        subtotal: request.subtotal,
+        discount: request.discount,
+        promoLabel: request.promoLabel,
+        total: request.total,
+        paymentMethod: request.paymentMethod,
+        ticketNo: nextTicketNo(store.orders),
+        paid: 0,
+        change: 0,
+        voided: true,
+        voidReason: request.reason,
+      });
+      request.processedOrderId = createdId;
+    }
+
+    request.status = "approved";
+    request.approvedAt = new Date().toISOString();
+    request.approvedByName = session.name;
   });
 
   if (error) return { error };
@@ -376,150 +647,154 @@ export async function voidCheckout(
   return { ok: true, id: createdId };
 }
 
-export async function requestVoidApproval(input: {
-  reason: string;
-  orderId?: string | null;
-  cart?: OrderItem[];
-  promoId?: string | null;
-  paymentMethod?: string | null;
-}) {
-  const session = await requireCashier();
-  const reason = input.reason.trim();
-  if (!reason) {
-    return { error: "Enter a reason for voiding." };
+export async function beginPrintJob(jobId: string) {
+  await requirePos();
+  let error: string | undefined;
+  let updated: PrintJob | null = null;
+
+  await updateStore((store) => {
+    const job = store.printJobs.find((entry) => entry.id === jobId);
+    const order = job
+      ? store.orders.find((entry) => entry.id === job.orderId)
+      : undefined;
+    if (!job || !order) {
+      error = "Print job not found.";
+      return;
+    }
+    if (order.voided || job.status === "cancelled") {
+      error = "A voided order cannot be printed.";
+      return;
+    }
+    if (job.status === "printed") {
+      error = "This print job has already succeeded.";
+      return;
+    }
+
+    job.attempts += 1;
+    job.status = "pending";
+    job.updatedAt = new Date().toISOString();
+    delete job.lastError;
+    updated = { ...job, label: job.label ? { ...job.label } : undefined };
+  });
+
+  if (error || !updated) return { error: error ?? "Unable to start print job." };
+  revalidatePath("/pos");
+  return { ok: true, job: updated };
+}
+
+export async function finishPrintJob(
+  jobId: string,
+  status: Extract<PrintJobStatus, "printed" | "failed">,
+  message?: string,
+) {
+  await requirePos();
+  if (status !== "printed" && status !== "failed") {
+    return { error: "Invalid print job status." };
   }
-
-  const cart = Array.isArray(input.cart) ? input.cart : [];
   let error: string | undefined;
+  let updated: PrintJob | null = null;
 
   await updateStore((store) => {
-    if (!Array.isArray(store.voidRequests)) store.voidRequests = [];
-
-    if (cart.length > 0) {
-      const items = cart.flatMap((line) => {
-        const qty = Number(line.qty);
-        if (!Number.isSafeInteger(qty) || qty < 1) return [];
-        return [{ productId: line.productId, name: line.name, qty, price: line.price, style: line.style }];
-      });
-      if (items.length === 0) {
-        error = "No items to void.";
-        return;
-      }
-      store.voidRequests.unshift({
-        id: `voidreq-${Date.now().toString(36)}`,
-        kind: "checkout",
-        cashierId: session.userId,
-        cashierName: session.name,
-        reason,
-        items,
-        total: items.reduce((sum, item) => sum + item.price * item.qty, 0),
-        promoId: input.promoId ?? null,
-        paymentMethod: parsePayment(input.paymentMethod),
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      });
+    const job = store.printJobs.find((entry) => entry.id === jobId);
+    if (!job) {
+      error = "Print job not found.";
+      return;
+    }
+    if (job.status === "cancelled") {
+      error = "A cancelled print job cannot be updated.";
       return;
     }
 
-    const orderId = input.orderId?.trim();
-    if (!orderId) {
-      error = "No ticket to void.";
-      return;
-    }
-    const order = store.orders.find((entry) => entry.id === orderId);
-    if (!order) {
-      error = "Ticket not found.";
-      return;
-    }
-    if (order.voided) {
-      error = "That ticket is already voided.";
-      return;
-    }
-    if (store.voidRequests.some((entry) => entry.status === "pending" && entry.orderId === orderId)) {
-      error = "A void request for this ticket is already waiting.";
-      return;
-    }
-    store.voidRequests.unshift({
-      id: `voidreq-${Date.now().toString(36)}`,
-      kind: "order",
-      orderId: order.id,
-      ticketNo: order.ticketNo,
-      cashierId: session.userId,
-      cashierName: session.name,
-      reason,
-      items: order.items,
-      total: order.total,
-      paymentMethod: order.paymentMethod,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    });
-  });
-
-  if (error) return { error };
-  revalidatePath("/pos");
-  revalidatePath("/admin");
-  return { ok: true };
-}
-
-export async function setVoidRequestStatus(id: string, status: "approved" | "denied") {
-  await requireAdmin();
-  let error: string | undefined;
-
-  await updateStore((store) => {
-    if (!Array.isArray(store.voidRequests)) store.voidRequests = [];
-    const request = store.voidRequests.find((entry) => entry.id === id);
-    if (!request) {
-      error = "Void request not found.";
-      return;
-    }
-    if (request.status !== "pending") {
-      error = "That request was already handled.";
-      return;
-    }
-    if (status === "denied") {
-      request.status = "denied";
-      return;
-    }
-
-    if (request.kind === "order" && request.orderId) {
-      const order = store.orders.find((entry) => entry.id === request.orderId);
-      if (!order) {
-        error = "Ticket not found.";
-        return;
-      }
-      order.voided = true;
-      order.voidReason = request.reason;
+    const now = new Date().toISOString();
+    job.status = status;
+    job.updatedAt = now;
+    if (status === "printed") {
+      job.printedAt = now;
+      delete job.lastError;
     } else {
-      store.orders.push({
-        id: `ord-${Date.now()}`,
-        createdAt: request.createdAt,
-        baristaName: request.cashierName,
-        items: request.items,
-        subtotal: request.total,
-        discount: 0,
-        total: request.total,
-        paymentMethod: request.paymentMethod ?? "cash",
-        ticketNo: nextTicketNo(store.orders),
-        paid: 0,
-        change: 0,
-        voided: true,
-        voidReason: request.reason,
-      });
+      job.lastError = (message || "Printer failed.").trim().slice(0, 240);
     }
-    request.status = "approved";
+    updated = { ...job, label: job.label ? { ...job.label } : undefined };
+  });
+
+  if (error || !updated) return { error: error ?? "Unable to update print job." };
+  revalidatePath("/pos");
+  return { ok: true, job: updated };
+}
+
+export async function queueReprintJobs(
+  orderId: string,
+  type: PrintJobType,
+  sourceLabelJobId?: string,
+) {
+  await requirePos();
+  if (type !== "cup-label" && type !== "customer-receipt") {
+    return { error: "Invalid print job type." };
+  }
+  let error: string | undefined;
+  let created: PrintJob[] = [];
+
+  await updateStore((store) => {
+    const order = store.orders.find((entry) => entry.id === orderId);
+    if (!order || order.voided) {
+      error = "Completed order not found.";
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    if (type === "customer-receipt") {
+      created = [
+        {
+          id: reprintId(order.id, type),
+          orderId: order.id,
+          type,
+          status: "pending",
+          attempts: 0,
+          createdAt,
+          updatedAt: createdAt,
+        },
+      ];
+    } else if (sourceLabelJobId) {
+      const source = store.printJobs.find(
+        (job) =>
+          job.id === sourceLabelJobId &&
+          job.orderId === order.id &&
+          job.type === "cup-label" &&
+          job.label,
+      );
+      if (!source?.label) {
+        error = "Cup label job not found.";
+        return;
+      }
+      created = [
+        {
+          id: reprintId(order.id, type),
+          orderId: order.id,
+          type,
+          status: "pending",
+          attempts: 0,
+          createdAt,
+          updatedAt: createdAt,
+          label: { ...source.label },
+        },
+      ];
+    } else {
+      created = labelJobsForOrder(
+        order,
+        store.menu,
+        reprintId(order.id, type),
+        createdAt,
+      );
+      if (created.length === 0) {
+        error = "This order has no cup labels.";
+        return;
+      }
+    }
+
+    store.printJobs.push(...created);
   });
 
   if (error) return { error };
   revalidatePath("/pos");
-  revalidatePath("/admin");
-  return { ok: true };
-}
-
-export async function deleteVoidRequest(id: string) {
-  await requireAdmin();
-  await updateStore((store) => {
-    store.voidRequests = (store.voidRequests ?? []).filter((entry) => entry.id !== id);
-  });
-  revalidatePath("/admin");
-  return { ok: true };
+  return { ok: true, printJobs: created };
 }

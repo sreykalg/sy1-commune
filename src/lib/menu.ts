@@ -59,6 +59,7 @@ export function pricedOrderLine(
     name: nextStyle ? `${menuItem.name} · ${drinkStyleLabel(nextStyle)}` : menuItem.name,
     qty,
     price: menuItem.price,
+    category: menuItem.category,
     style: nextStyle,
   };
 }
