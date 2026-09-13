@@ -13,9 +13,15 @@ export type StaffSession = {
 };
 
 export function pairLoginSessions(records: LoginActivity[]): StaffSession[] {
-  const chronological = [...records].sort(
-    (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id),
-  );
+  const chronological = [...records]
+    .filter(
+      (entry) =>
+        entry &&
+        typeof entry.userId === "string" &&
+        typeof entry.at === "string" &&
+        (entry.type === "login" || entry.type === "logout"),
+    )
+    .sort((a, b) => a.at.localeCompare(b.at) || String(a.id ?? "").localeCompare(String(b.id ?? "")));
   const openByUser = new Map<string, StaffSession[]>();
   const sessions: StaffSession[] = [];
 
