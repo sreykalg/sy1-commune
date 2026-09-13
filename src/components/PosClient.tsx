@@ -51,6 +51,7 @@ type PosClientProps = {
 const CASH_PRESETS = [500, 1000, 2000];
 const CHECKOUT_KEY = "commune_pos_checkout";
 const TEST_PRINTER_ENABLED = process.env.NEXT_PUBLIC_TEST_PRINTER === "true";
+const PROMOTIONS_ENABLED = false;
 
 type SavedCheckout = {
   userId: string;
@@ -138,7 +139,10 @@ export function PosClient({
   const labelPrinter = useLabelPrinter();
   const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
-  const activePromos = promotions.filter((item) => item.active);
+  const activePromos = PROMOTIONS_ENABLED
+    ? promotions.filter((item) => item.active)
+    : [];
+  const appliedPromoId = PROMOTIONS_ENABLED ? promoId : null;
   const availableOrders = useMemo(() => {
     const byId = new Map(orders.map((order) => [order.id, order]));
     if (lastOrder) byId.set(lastOrder.id, lastOrder);
@@ -199,7 +203,7 @@ export function PosClient({
         setCart(saved.cart);
         setTendered(saved.tendered);
         setPaymentMethod(saved.paymentMethod);
-        setPromoId(saved.promoId);
+        setPromoId(PROMOTIONS_ENABLED ? saved.promoId : null);
         setActiveVoidRequestId(saved.voidRequestId);
       }
       setCheckoutReady(true);
@@ -216,13 +220,19 @@ export function PosClient({
       cart,
       tendered,
       paymentMethod,
-      promoId,
+      promoId: appliedPromoId,
       voidRequestId: activeVoidRequestId,
     });
-  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, promoId, activeVoidRequestId]);
+  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, appliedPromoId, activeVoidRequestId]);
 
   useEffect(() => {
-    if (!promoId || promotions.some((item) => item.id === promoId && item.active)) return;
+    if (
+      !promoId ||
+      (PROMOTIONS_ENABLED &&
+        promotions.some((item) => item.id === promoId && item.active))
+    ) {
+      return;
+    }
     let cancelled = false;
     Promise.resolve().then(() => {
       if (!cancelled) setPromoId(null);
@@ -362,7 +372,7 @@ export function PosClient({
           voidReason,
           voidUsername,
           voidPassword,
-          promoId,
+          appliedPromoId,
           paymentMethod,
         );
         if ("error" in result && result.error) {
@@ -425,7 +435,7 @@ export function PosClient({
         cart,
         voidReason,
         targetId,
-        promoId,
+        appliedPromoId,
         paymentMethod,
       );
       if ("error" in result && result.error) {
@@ -1201,7 +1211,7 @@ export function PosClient({
                 <span>{formatMoney(isCash ? change : total)}</span>
               </div>
 
-              {promoOpen ? (
+              {PROMOTIONS_ENABLED && promoOpen ? (
                 <div className="grid grid-cols-2 gap-1.5">
                   {activePromos.length === 0 ? (
                     <p className="col-span-2 text-center text-[11px] text-neutral-500">
@@ -1228,18 +1238,24 @@ export function PosClient({
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPromoOpen((value) => !value)}
-                  className={`rounded-lg border py-2 text-xs transition ${
-                    promoId
-                      ? "border-black bg-black text-white"
-                      : "border-neutral-300 hover:border-black"
-                  }`}
-                >
-                  Promotions
-                </button>
+              <div
+                className={`grid gap-1.5 pt-1 ${
+                  PROMOTIONS_ENABLED ? "grid-cols-3" : "grid-cols-2"
+                }`}
+              >
+                {PROMOTIONS_ENABLED ? (
+                  <button
+                    type="button"
+                    onClick={() => setPromoOpen((value) => !value)}
+                    className={`rounded-lg border py-2 text-xs transition ${
+                      promoId
+                        ? "border-black bg-black text-white"
+                        : "border-neutral-300 hover:border-black"
+                    }`}
+                  >
+                    Promotions
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={printTicket}
@@ -1271,7 +1287,7 @@ export function PosClient({
                   startTransition(async () => {
                     const result = await createOrder(
                       cart,
-                      promoId,
+                      appliedPromoId,
                       paymentMethod,
                       paid,
                     );
