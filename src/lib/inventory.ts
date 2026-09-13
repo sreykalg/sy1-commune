@@ -175,6 +175,31 @@ export function costingIngredientForItem(
   );
 }
 
+export const CUP_SKUS = [
+  { id: "cups-peta", name: "Peta Cup" },
+  { id: "cups-daba", name: "Daba Cup" },
+  { id: "cups-hot", name: "Hot Cup" },
+] as const;
+
+export function cupSkuForItem(item: { id?: string; name: string }) {
+  const id = item.id ?? "";
+  const name = item.name.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+  for (const sku of CUP_SKUS) {
+    if (id === sku.id) return sku;
+    const stem = sku.name.replace(/ cup$/i, "").toLowerCase();
+    if (
+      name === stem ||
+      name === `${stem} cup` ||
+      name === `${stem} cups` ||
+      name === `cups ${stem}` ||
+      name === `cups - ${stem}`
+    ) {
+      return sku;
+    }
+  }
+  return null;
+}
+
 function findInventory(
   inventory: InventoryItem[],
   tester: (item: InventoryItem) => boolean,
@@ -199,6 +224,18 @@ function isDrinkCategory(category: string) {
 function isMilkDrink(category: string) {
   const value = category.replace(/-/g, " ").toLowerCase();
   return value.includes("non coffee") || value.includes("fresh");
+}
+
+function cupForDrink(
+  category: string,
+  peta?: InventoryItem,
+  daba?: InventoryItem,
+  hot?: InventoryItem,
+) {
+  const value = category.replace(/-/g, " ").toLowerCase();
+  if (value === "classic") return hot ?? peta ?? daba;
+  if (value.includes("fresh")) return daba ?? peta ?? hot;
+  return peta ?? daba ?? hot;
 }
 
 export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
@@ -236,7 +273,9 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
     store.inventory,
     (item) => item.id === "sugar" || /^sugar$/i.test(item.name),
   );
-  const cups = findInventory(store.inventory, (item) => item.id === "cups" || /^cups?$/i.test(item.name));
+  const peta = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-peta");
+  const daba = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-daba");
+  const hot = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-hot");
 
   if (isMatchaDrink(name, category)) {
     addByCosting(matcha, 10);
@@ -251,7 +290,7 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   }
 
   if (isDrinkCategory(category)) {
-    addInventory(cups, 1, "pcs");
+    addInventory(cupForDrink(category, peta, daba, hot), 1, "pcs");
   }
 
   return ingredients;

@@ -217,6 +217,14 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
   const [stockQty, setStockQty] = useState("");
   const [stockUnit, setStockUnit] = useState("grams");
 
+  function resetStockForm() {
+    setEditStockId(null);
+    setStockName("");
+    setStockCategory("");
+    setStockQty("");
+    setStockUnit("grams");
+  }
+
   const [editRestockId, setEditRestockId] = useState<string | null>(null);
   const [restockItem, setRestockItem] = useState("");
   const [restockQty, setRestockQty] = useState("");
@@ -436,10 +444,7 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
       await persistInventory(nextStocks);
       await saveAdminData({ restocks: nextRestocks });
     }
-    setStockName("");
-    setStockCategory("");
-    setStockQty("");
-    setStockUnit("grams");
+    resetStockForm();
   };
 
   const handleEditStock = (s: StockItem) => {
@@ -756,7 +761,7 @@ export function SalePurchaseTransactions({ store }: { store: StoreData }) {
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="flex-1 bg-black text-white px-4 py-1.5 rounded text-sm font-medium">{editStockId ? "Update" : "Add"}</button>
-                <button type="button" onClick={() => { setEditStockId(null); setStockName(""); setStockCategory(""); setStockQty(""); setStockUnit("grams"); }} className="border border-neutral-300 bg-white text-black hover:bg-neutral-100 px-4 py-1.5 rounded text-sm font-medium">Clear</button>
+                <button type="button" onClick={resetStockForm} className="border border-neutral-300 bg-white text-black hover:bg-neutral-100 px-4 py-1.5 rounded text-sm font-medium">Clear</button>
               </div>
             </form>
           </div>

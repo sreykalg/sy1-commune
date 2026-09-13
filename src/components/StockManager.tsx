@@ -32,7 +32,9 @@ export function StockManager({ title = "Inventory Management" }: { title?: strin
       { id: "1", name: "Coffee Beans", category: "Ingredients", unit: "kg", cost: 650, stock: 5, maxStock: 20 },
       { id: "2", name: "Milk", category: "Dairy", unit: "liters", cost: 95, stock: 10, maxStock: 50 },
       { id: "3", name: "Matcha Powder", category: "Ingredients", unit: "grams", cost: 450, stock: 300, maxStock: 500 },
-      { id: "4", name: "Cups", category: "Packaging", unit: "pcs", cost: 3, stock: 150, maxStock: 500 },
+      { id: "4", name: "Peta Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 150, maxStock: 500 },
+      { id: "4b", name: "Daba Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 150, maxStock: 500 },
+      { id: "4c", name: "Hot Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 150, maxStock: 500 },
     ];
   });
 

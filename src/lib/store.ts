@@ -11,6 +11,7 @@ import type {
   StaffUser,
   StoreData,
 } from "@/lib/types";
+import { CUP_SKUS, cupSkuForItem } from "@/lib/inventory";
 import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { DEFAULT_LOGIN_GATES, normalizeLoginGates } from "@/lib/staff-gates";
@@ -121,7 +122,9 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
   { id: "coffee-beans", name: "Coffee Beans", category: "Ingredients", unit: "grams", cost: 650, stock: 1000, maxStock: 5000 },
   { id: "milk", name: "Milk", category: "Dairy", unit: "ml", cost: 95, stock: 5000, maxStock: 10000 },
   { id: "sugar", name: "Sugar", category: "Ingredients", unit: "grams", cost: 80, stock: 1000, maxStock: 5000 },
-  { id: "cups", name: "Cups", category: "Packaging", unit: "pcs", cost: 3, stock: 200, maxStock: 1000 },
+  { id: "cups-peta", name: "Peta Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 200, maxStock: 1000 },
+  { id: "cups-daba", name: "Daba Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 200, maxStock: 1000 },
+  { id: "cups-hot", name: "Hot Cup", category: "Packaging", unit: "pcs", cost: 3, stock: 200, maxStock: 1000 },
   { id: "matcha-powder", name: "Matcha Powder", category: "Ingredients", unit: "grams", cost: 450, stock: 500, maxStock: 1000 },
 ];
 
@@ -137,7 +140,7 @@ const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = Object.fromEntries(
     { inventoryItemId: "coffee-beans", name: "Coffee Beans", amount: 18, unit: "grams" },
     { inventoryItemId: "milk", name: "Milk", amount: 133, unit: "ml" },
     { inventoryItemId: "sugar", name: "Sugar", amount: 10, unit: "grams" },
-    { inventoryItemId: "cups", name: "Cups", amount: 1, unit: "pcs" },
+    { inventoryItemId: "cups-peta", name: "Peta Cup", amount: 1, unit: "pcs" },
   ]]),
 );
 
@@ -159,6 +162,48 @@ function emptyStore(): StoreData {
     voidRequests: [],
     loginGates: { ...DEFAULT_LOGIN_GATES },
   };
+}
+
+function isGenericCups(item: InventoryItem) {
+  return item.id === "cups" || /^cups?$/i.test(item.name.trim());
+}
+
+function cupTemplate(sku: (typeof CUP_SKUS)[number]): InventoryItem {
+  return {
+    id: sku.id,
+    name: sku.name,
+    category: "Packaging",
+    unit: "pcs",
+    cost: 3,
+    stock: 200,
+    maxStock: 1000,
+  };
+}
+
+function ensureCupTypes(inventory: InventoryItem[]): InventoryItem[] {
+  const generic = inventory.find(isGenericCups);
+  const next = inventory
+    .filter((item) => !isGenericCups(item))
+    .map((item) => {
+      const sku = cupSkuForItem(item);
+      return sku && item.name !== sku.name ? { ...item, name: sku.name } : item;
+    });
+  const leftover = generic?.stock ?? 0;
+  const missing = CUP_SKUS.filter((sku) => !next.some((item) => cupSkuForItem(item)?.id === sku.id));
+  const share = missing.length > 0 ? Math.floor(leftover / missing.length) : 0;
+  let remainder = leftover - share * missing.length;
+
+  for (const sku of CUP_SKUS) {
+    if (next.some((item) => cupSkuForItem(item)?.id === sku.id)) continue;
+    next.push({
+      ...cupTemplate(sku),
+      stock: share + (remainder > 0 ? 1 : 0),
+      maxStock: generic?.maxStock || 1000,
+      cost: generic?.cost || 3,
+    });
+    if (remainder > 0) remainder -= 1;
+  }
+  return next;
 }
 
 function uniqueCategories(values: string[]): string[] {
@@ -222,6 +267,7 @@ function normalizeStore(store: StoreData): StoreData {
       cost: Number(item.cost) || 0,
       unit: item.unit || "pcs",
     }));
+    store.inventory = ensureCupTypes(store.inventory);
   }
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);
@@ -342,6 +388,7 @@ async function readStore(): Promise<StoreData> {
   if (
     store.costings.length !== originalCostings.length ||
     store.inventory.length !== originalInventory.length ||
+    store.inventory.some((item) => originalInventory.find((row) => row.id === item.id)?.name !== item.name) ||
     store.users.length !== originalUsers.length ||
     store.users.some((user) => originalUsers.find((item) => item.id === user.id)?.role !== user.role) ||
     store.loginGates.admin !== originalGates?.admin ||
