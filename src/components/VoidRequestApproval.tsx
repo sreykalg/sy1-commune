@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
 import { approveVoidRequest, deleteVoidRequest } from "@/actions/pos";
 import { formatMoney } from "@/lib/menu";
 import { phDateTimeLabel } from "@/lib/datetime";
 import type { VoidRequest } from "@/lib/types";
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" aria-hidden="true">
+      <path d="M5 7h14M10 7V5h4v2M8 7l1 12h6l1-12" strokeWidth="1.7" />
+    </svg>
+  );
+}
 
 function toInputDateStr(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -118,7 +125,7 @@ function RequestActions({
             }}
             className="inline-flex items-center justify-center rounded-full border border-neutral-200 p-2 text-neutral-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
           >
-            <Trash2 aria-hidden="true" />
+            <TrashIcon />
             <span className="sr-only">Delete</span>
           </button>
         </>
