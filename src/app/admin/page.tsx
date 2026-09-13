@@ -5,6 +5,8 @@ import { getSession } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 import { publicUser } from "@/lib/users";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPage() {
   const session = await getSession();
   if (!session || session.role !== "admin") {
