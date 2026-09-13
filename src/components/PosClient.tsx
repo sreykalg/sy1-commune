@@ -647,7 +647,7 @@ export function PosClient({
               {clockedInBaristas.length === 0
                 ? "Barista in"
                 : clockedInBaristas.length === 1
-                  ? `In · ${clockedInBaristas[0].name}`
+                  ? `In - ${clockedInBaristas[0].name}`
                   : `${clockedInBaristas.length} baristas in`}
             </button>
             <button
