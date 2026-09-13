@@ -198,20 +198,18 @@ export function SalePurchaseTransactions({
     store.inventory,
   );
   const persistedUsages: UsageRecord[] = store.usageLogs
-    .map((entry, index) => {
-      const order = store.orders.find((item) => item.id === entry.orderId);
-      return {
-        id: entry.id,
-        date: entry.date,
-        itemName: entry.itemName,
-        usedAmount: entry.usedAmount,
-        unit: entry.unit,
-        remaining: reconstructedRemaining[index] ?? entry.remaining ?? 0,
-        soldAs: order && !order.voided
-          ? order.items.map((item) => `${item.qty}x ${item.name}`).join(", ")
-          : "",
-      };
-    })
+    .map((entry, index) => ({ entry, index, order: store.orders.find((item) => item.id === entry.orderId) }))
+    .filter(({ order }) => Boolean(order && !order.voided))
+    .map(({ entry, index, order }) => ({
+      id: entry.id,
+      orderId: entry.orderId,
+      date: entry.date,
+      itemName: entry.itemName,
+      usedAmount: entry.usedAmount,
+      unit: entry.unit,
+      remaining: reconstructedRemaining[index] ?? entry.remaining ?? 0,
+      soldAs: order!.items.map((item) => `${item.qty}x ${item.name}`).join(", "),
+    }))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
   const getTodayDate = () => phDateString();
