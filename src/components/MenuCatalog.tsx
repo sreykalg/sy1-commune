@@ -10,8 +10,8 @@ import {
   setMenuItemAvailable,
   updateMenuItem,
 } from "@/actions/menu";
-import { formatMoney } from "@/lib/menu";
-import type { MenuItem } from "@/lib/types";
+import { DRINK_STYLES, drinkStyleLabel, drinkStyleLabelList, formatMoney, isFoodOrPastry, normalizeMenuStyles } from "@/lib/menu";
+import type { DrinkStyle, MenuItem } from "@/lib/types";
 
 type MenuCatalogProps = {
   menu: MenuItem[];
@@ -102,6 +102,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
   const [itemPrice, setItemPrice] = useState("");
   const [itemCategory, setItemCategory] = useState("");
   const [itemAvailable, setItemAvailable] = useState(true);
+  const [itemStyles, setItemStyles] = useState<DrinkStyle[]>([...DRINK_STYLES]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -129,6 +130,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     setItemPrice("");
     setItemCategory(filter !== "All" ? filter : categories[0] ?? "");
     setItemAvailable(true);
+    setItemStyles(isFoodOrPastry(filter !== "All" ? filter : categories[0] ?? "") ? [] : [...DRINK_STYLES]);
     setNotice(null);
     setTab("items");
   }
@@ -139,6 +141,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     setItemPrice(String(item.price));
     setItemCategory(item.category);
     setItemAvailable(item.available !== false);
+    setItemStyles(normalizeMenuStyles(item));
     setNotice(null);
     setTab("items");
   }
@@ -154,6 +157,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     data.set("price", itemPrice);
     data.set("category", itemCategory);
     data.set("available", itemAvailable ? "true" : "false");
+    for (const style of itemStyles) data.append("styles", style);
     return data;
   }
 
@@ -414,7 +418,16 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                   </label>
                   <label className="text-xs font-medium text-neutral-600">
                     <span className="mb-1.5 block">Category</span>
-                    <select value={itemCategory} onChange={(event) => setItemCategory(event.target.value)} className={field} required>
+                    <select
+                      value={itemCategory}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setItemCategory(next);
+                        setItemStyles(isFoodOrPastry(next) ? [] : itemStyles.length > 0 ? itemStyles : [...DRINK_STYLES]);
+                      }}
+                      className={field}
+                      required
+                    >
                       <option value="" disabled>
                         Select a category
                       </option>
@@ -426,6 +439,32 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                     </select>
                   </label>
                 </div>
+                {!isFoodOrPastry(itemCategory) ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-neutral-600">Type</p>
+                    <div className="flex gap-2">
+                      {DRINK_STYLES.map((style) => {
+                        const on = itemStyles.includes(style);
+                        return (
+                          <button
+                            key={style}
+                            type="button"
+                            onClick={() =>
+                              setItemStyles((current) =>
+                                on ? current.filter((entry) => entry !== style) : [...current, style],
+                              )
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                              on ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-600"
+                            }`}
+                          >
+                            {drinkStyleLabel(style)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <label className="flex items-center gap-2 text-sm text-neutral-700">
                     <input
@@ -453,6 +492,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                   <tr className="border-b border-neutral-200 text-xs font-medium tracking-wide text-neutral-400 uppercase">
                     <th className="px-4 py-3">Item</th>
                     <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3 text-right">Price</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="sticky right-0 bg-white px-3 py-3 text-right"> </th>
@@ -461,7 +501,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                 <tbody>
                   {visibleItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-neutral-400">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-neutral-400">
                         {categories.length === 0 ? "Add a category, then add items." : "No items in this category."}
                       </td>
                     </tr>
@@ -470,6 +510,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                       <tr key={item.id} className="border-t border-neutral-100">
                         <td className="px-4 py-3 font-medium">{item.name}</td>
                         <td className="px-4 py-3 text-neutral-500">{item.category}</td>
+                        <td className="px-4 py-3 text-neutral-500">{drinkStyleLabelList(item)}</td>
                         <td className="px-4 py-3 text-right">{formatMoney(item.price)}</td>
                         <td className="px-4 py-3">
                           <span className={`text-xs ${item.available !== false ? "text-neutral-900" : "text-neutral-400"}`}>

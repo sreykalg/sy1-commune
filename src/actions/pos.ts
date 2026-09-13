@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { nextTicketNo } from "@/lib/escpos";
+import { pricedOrderLine } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { ingredientsForOrderLine, roundQty } from "@/lib/inventory";
 import { canUsePos } from "@/lib/users";
@@ -130,12 +131,7 @@ export async function createOrder(
         error = "Each item quantity must be a whole number from 1 to 99.";
         return;
       }
-      priced.push({
-        productId: menuItem.id,
-        name: menuItem.name,
-        qty,
-        price: menuItem.price,
-      });
+      priced.push(pricedOrderLine(menuItem, { ...line, qty }));
     }
 
     const requestedStock = new Map<string, number>();
@@ -337,12 +333,7 @@ export async function voidCheckout(
         error = "Each item quantity must be a whole number from 1 to 99.";
         return;
       }
-      priced.push({
-        productId: menuItem.id,
-        name: menuItem.name,
-        qty,
-        price: menuItem.price,
-      });
+      priced.push(pricedOrderLine(menuItem, { ...line, qty }));
     }
 
     const subtotal = priced.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -408,7 +399,7 @@ export async function requestVoidApproval(input: {
       const items = cart.flatMap((line) => {
         const qty = Number(line.qty);
         if (!Number.isSafeInteger(qty) || qty < 1) return [];
-        return [{ productId: line.productId, name: line.name, qty, price: line.price }];
+        return [{ productId: line.productId, name: line.name, qty, price: line.price, style: line.style }];
       });
       if (items.length === 0) {
         error = "No items to void.";

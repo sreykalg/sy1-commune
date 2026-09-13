@@ -1,4 +1,4 @@
-import type { MenuItem } from "@/lib/types";
+import type { DrinkStyle, MenuItem, OrderItem } from "@/lib/types";
 
 export const MENU_IMAGES = [
   { label: "Logo", src: "/images/logo.jpg" },
@@ -13,6 +13,55 @@ export const MENU_CATEGORIES = [
   "Food",
   "Pastries",
 ] as const;
+
+export const DRINK_STYLES: DrinkStyle[] = ["iced", "hot"];
+
+export function isFoodOrPastry(category: string) {
+  return /food|pastr/i.test(category);
+}
+
+export function drinkStyleLabel(style: DrinkStyle) {
+  return style === "hot" ? "Hot" : "Iced";
+}
+
+export function normalizeMenuStyles(item: Pick<MenuItem, "category" | "styles">): DrinkStyle[] {
+  if (isFoodOrPastry(item.category)) return [];
+  const raw = Array.isArray(item.styles) ? item.styles : DRINK_STYLES;
+  const next = DRINK_STYLES.filter((style) => raw.includes(style));
+  return next.length > 0 ? next : [...DRINK_STYLES];
+}
+
+export function drinkStyleLabelList(item: Pick<MenuItem, "category" | "styles">) {
+  const styles = normalizeMenuStyles(item);
+  return styles.length > 0 ? styles.map(drinkStyleLabel).join(" / ") : "—";
+}
+
+export function parseDrinkStyle(value: unknown): DrinkStyle | undefined {
+  return value === "hot" || value === "iced" ? value : undefined;
+}
+
+export function pricedOrderLine(
+  menuItem: MenuItem,
+  line: Pick<OrderItem, "qty" | "name" | "style">,
+): OrderItem {
+  const qty = Number(line.qty);
+  const style =
+    parseDrinkStyle(line.style) ??
+    (/·\s*hot$/i.test(line.name) || /\(hot\)$/i.test(line.name)
+      ? "hot"
+      : /·\s*iced$/i.test(line.name) || /\(iced\)$/i.test(line.name)
+        ? "iced"
+        : undefined);
+  const allowed = normalizeMenuStyles(menuItem);
+  const nextStyle = style && allowed.includes(style) ? style : allowed.length === 1 ? allowed[0] : undefined;
+  return {
+    productId: menuItem.id,
+    name: nextStyle ? `${menuItem.name} · ${drinkStyleLabel(nextStyle)}` : menuItem.name,
+    qty,
+    price: menuItem.price,
+    style: nextStyle,
+  };
+}
 
 export const DEFAULT_MENU: MenuItem[] = ([
   // Special
@@ -58,6 +107,7 @@ export const DEFAULT_MENU: MenuItem[] = ([
 ]).map((item) => ({
   ...item,
   image: MENU_IMAGES[0].src,
+  styles: isFoodOrPastry(item.category) ? [] : [...DRINK_STYLES],
 }));
 
 export const MENU = DEFAULT_MENU;

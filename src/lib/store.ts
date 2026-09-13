@@ -12,7 +12,7 @@ import type {
   StoreData,
 } from "@/lib/types";
 import { CUP_SKUS, cupSkuForItem } from "@/lib/inventory";
-import { DEFAULT_MENU, MENU_CATEGORIES } from "@/lib/menu";
+import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuStyles } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { DEFAULT_LOGIN_GATES, normalizeLoginGates } from "@/lib/staff-gates";
 import { DEFAULT_PROMOS } from "@/lib/promos";
@@ -238,6 +238,7 @@ function normalizeStore(store: StoreData): StoreData {
       ...item,
       available: item.available !== false,
       image: item.image || "/images/drinks.jpg",
+      styles: normalizeMenuStyles(item),
     }));
   }
   store.categories = uniqueCategories([
@@ -395,7 +396,13 @@ async function readStore(): Promise<StoreData> {
   const originalCostings = Array.isArray(original.costings) ? original.costings : [];
   const originalInventory = Array.isArray(original.inventory) ? original.inventory : [];
   const originalUsers = Array.isArray(original.users) ? original.users : [];
+  const originalMenu = Array.isArray(original.menu) ? original.menu : [];
   const originalGates = original.loginGates;
+  const menuNeedsStyles = originalMenu.some((item) => {
+    const normalized = normalizeMenuStyles(item);
+    const current = Array.isArray(item.styles) ? item.styles : [];
+    return current.length !== normalized.length || current.some((style, index) => style !== normalized[index]);
+  });
   if (
     store.costings.length !== originalCostings.length ||
     store.inventory.length !== originalInventory.length ||
@@ -403,7 +410,8 @@ async function readStore(): Promise<StoreData> {
     store.users.length !== originalUsers.length ||
     store.users.some((user) => originalUsers.find((item) => item.id === user.id)?.role !== user.role) ||
     store.loginGates.admin !== originalGates?.admin ||
-    store.loginGates.cashier !== originalGates?.cashier
+    store.loginGates.cashier !== originalGates?.cashier ||
+    menuNeedsStyles
   ) {
     await writeStore(store);
   }

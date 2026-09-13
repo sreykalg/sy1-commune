@@ -7,6 +7,8 @@ export type Session = {
   role: Role;
 };
 
+export type DrinkStyle = "iced" | "hot";
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ export type MenuItem = {
   category: string;
   image: string;
   available: boolean;
+  styles?: DrinkStyle[];
 };
 
 export type OrderItem = {
@@ -21,6 +24,7 @@ export type OrderItem = {
   name: string;
   qty: number;
   price: number;
+  style?: DrinkStyle;
 };
 
 export type PaymentMethod = "cash" | "gcash" | "maya";

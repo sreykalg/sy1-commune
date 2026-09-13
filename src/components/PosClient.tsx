@@ -6,12 +6,13 @@ import { logout } from "@/actions/auth";
 import { punchBaristaShift } from "@/actions/users";
 import { createOrder, openPos, requestVoidApproval, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
-import { formatMoney } from "@/lib/menu";
+import { drinkStyleLabel, formatMoney, normalizeMenuStyles } from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
 import { drinkReceipts, nextTicketNo, type ReceiptTicket } from "@/lib/escpos";
 import { useReceiptPrinter } from "@/lib/receipt-printer";
 import type {
+  DrinkStyle,
   MenuItem,
   Order,
   OrderItem,
@@ -56,12 +57,14 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
       if (!product || product.available === false) return [];
       const qty = Math.floor(Number(item.qty));
       if (!Number.isFinite(qty) || qty < 1) return [];
+      const style = item.style === "hot" || item.style === "iced" ? item.style : undefined;
       return [
         {
           productId: product.id,
           name: product.name,
           qty,
           price: product.price,
+          style,
         },
       ];
     });
@@ -113,6 +116,7 @@ export function PosClient({
   const [baristaUsername, setBaristaUsername] = useState("");
   const [baristaPassword, setBaristaPassword] = useState("");
   const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
+  const [stylePick, setStylePick] = useState<MenuItem | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const printer = useReceiptPrinter();
@@ -212,20 +216,29 @@ export function PosClient({
   const cashierPaidVoid = !isManager && cart.length === 0 ? lastOrderId : null;
   const canCharge = !isManager && pos.isOpen && cart.length > 0 && (!isCash || paid >= total);
 
-  function addItem(id: string, name: string, price: number) {
+  function addItem(id: string, name: string, price: number, style?: DrinkStyle) {
     if (!pos.isOpen || isManager) {
       return;
     }
     setCart((current) => {
-      const existing = current.find((item) => item.productId === id);
+      const existing = current.find((item) => item.productId === id && item.style === style);
       if (existing) {
         return current.map((item) =>
-          item.productId === id ? { ...item, qty: item.qty + 1 } : item,
+          item.productId === id && item.style === style ? { ...item, qty: item.qty + 1 } : item,
         );
       }
-      return [...current, { productId: id, name, qty: 1, price }];
+      return [...current, { productId: id, name, qty: 1, price, style }];
     });
     setMessage(null);
+  }
+
+  function handleMenuTap(item: MenuItem) {
+    const styles = normalizeMenuStyles(item);
+    if (styles.length > 1) {
+      setStylePick(item);
+      return;
+    }
+    addItem(item.id, item.name, item.price, styles[0]);
   }
 
   function handleConfirmVoid(e: React.FormEvent) {
@@ -355,6 +368,7 @@ export function PosClient({
       barista: session.name,
       items: cart.map((item) => ({
         ...item,
+        name: item.style ? `${item.name} · ${drinkStyleLabel(item.style)}` : item.name,
         category: menu.find((menuItem) => menuItem.id === item.productId)?.category,
       })),
       subtotal,
@@ -474,6 +488,38 @@ export function PosClient({
             </button>
           </div>
         </header>
+
+        {stylePick ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+              <button
+                type="button"
+                aria-label="Close drink type"
+                onClick={() => setStylePick(null)}
+                className="absolute top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black"
+              >
+                ×
+              </button>
+              <h2 className="text-xl font-semibold tracking-tight">{stylePick.name}</h2>
+              <p className="mt-1 text-sm text-neutral-500">Choose Iced or Hot.</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                {normalizeMenuStyles(stylePick).map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    onClick={() => {
+                      addItem(stylePick.id, stylePick.name, stylePick.price, style);
+                      setStylePick(null);
+                    }}
+                    className="rounded-2xl border border-neutral-200 px-4 py-4 text-sm font-medium hover:border-black hover:bg-black hover:text-white"
+                  >
+                    {drinkStyleLabel(style)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {baristaModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -959,11 +1005,16 @@ export function PosClient({
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => addItem(item.id, item.name, item.price)}
+                      onClick={() => handleMenuTap(item)}
                       disabled={isManager}
                       className="rounded-2xl border border-neutral-300 bg-white p-3 text-center transition hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <p className="text-xs font-medium">{item.name}</p>
+                      {normalizeMenuStyles(item).length > 0 ? (
+                        <p className="mt-0.5 text-[10px] text-neutral-400">
+                          {normalizeMenuStyles(item).map(drinkStyleLabel).join(" / ")}
+                        </p>
+                      ) : null}
                       <p className="mt-0.5 text-xs text-neutral-600">
                         {formatMoney(item.price)}
                       </p>
@@ -1012,10 +1063,15 @@ export function PosClient({
               ) : (
                 cart.map((item) => (
                   <li
-                    key={item.productId}
-                    className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-b border-neutral-100 py-1.5 last:border-none"
+                    key={`${item.productId}-${item.style ?? "plain"}`}
+                    className="grid grid-cols-[1fr_auto_auto] items-start gap-x-3 border-b border-neutral-100 py-1.5 last:border-none"
                   >
-                    <span className="min-w-0 truncate text-xs">{item.name}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs">{item.name}</p>
+                      {item.style ? (
+                        <p className="text-[10px] text-neutral-600">{drinkStyleLabel(item.style)}</p>
+                      ) : null}
+                    </div>
                     <span className="w-16 text-center text-xs">{item.qty}</span>
                     <span className="w-16 text-right text-xs">
                       {formatMoney(item.price * item.qty)}

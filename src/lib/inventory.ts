@@ -2,6 +2,7 @@ import { phDateString, phTimestamp } from "@/lib/datetime";
 import type {
   CostingIngredient,
   CostingItem,
+  DrinkStyle,
   InventoryItem,
   MenuItem,
   OrderItem,
@@ -226,12 +227,26 @@ function isMilkDrink(category: string) {
   return value.includes("non coffee") || value.includes("fresh");
 }
 
+function styleFromLine(line: { name: string; style?: DrinkStyle }): DrinkStyle | undefined {
+  if (line.style === "hot" || line.style === "iced") return line.style;
+  if (/·\s*hot$/i.test(line.name) || /\(hot\)$/i.test(line.name)) return "hot";
+  if (/·\s*iced$/i.test(line.name) || /\(iced\)$/i.test(line.name)) return "iced";
+  return undefined;
+}
+
 function cupForDrink(
   category: string,
+  style: DrinkStyle | undefined,
   peta?: InventoryItem,
   daba?: InventoryItem,
   hot?: InventoryItem,
 ) {
+  if (style === "hot") return hot ?? peta ?? daba;
+  if (style === "iced") {
+    const value = category.replace(/-/g, " ").toLowerCase();
+    if (value.includes("fresh")) return daba ?? peta ?? hot;
+    return peta ?? daba ?? hot;
+  }
   const value = category.replace(/-/g, " ").toLowerCase();
   if (value === "classic") return hot ?? peta ?? daba;
   if (value.includes("fresh")) return daba ?? peta ?? hot;
@@ -290,7 +305,7 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   }
 
   if (isDrinkCategory(category)) {
-    addInventory(cupForDrink(category, peta, daba, hot), 1, "pcs");
+    addInventory(cupForDrink(category, styleFromLine(line), peta, daba, hot), 1, "pcs");
   }
 
   return ingredients;

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { menuItemId } from "@/lib/menu";
+import { isFoodOrPastry, menuItemId, normalizeMenuStyles } from "@/lib/menu";
+import type { DrinkStyle } from "@/lib/types";
 import { updateStore, uploadPublicMenuPhoto } from "@/lib/store";
 
 const PHOTO_TYPES: Record<string, string> = {
@@ -66,6 +67,15 @@ async function saveMenuPhoto(file: File, id: string) {
 function photoFromForm(formData: FormData) {
   const photo = formData.get("photo");
   return photo instanceof File && photo.size > 0 ? photo : null;
+}
+
+function stylesFromForm(formData: FormData, category: string): DrinkStyle[] {
+  if (isFoodOrPastry(category)) return [];
+  const selected: DrinkStyle[] = formData.getAll("styles").flatMap((value) => {
+    const style = String(value);
+    return style === "iced" || style === "hot" ? [style] : [];
+  });
+  return normalizeMenuStyles({ category, styles: selected });
 }
 
 export async function addMenuCategory(name: string) {
@@ -187,6 +197,7 @@ export async function createMenuItem(formData: FormData) {
       category,
       image,
       available,
+      styles: stylesFromForm(formData, category),
     });
   });
   refresh();
@@ -228,6 +239,7 @@ export async function updateMenuItem(formData: FormData) {
     item.price = Math.round(price);
     item.category = category;
     item.available = available;
+    item.styles = stylesFromForm(formData, category);
     if (uploaded) {
       item.image = uploaded;
     } else if (!isSafeImage(item.image)) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatMoney } from "@/lib/menu";
+import { drinkStyleLabelList, formatMoney } from "@/lib/menu";
 import type { MenuItem } from "@/lib/types";
 
 type DrinksMenuProps = {
@@ -118,6 +118,11 @@ export function DrinksMenu({ items, categories = [] }: DrinksMenuProps) {
                     <h3 className="font-medium tracking-wide text-white text-base">
                       {item.name}
                     </h3>
+                    {drinkStyleLabelList(item) !== "—" ? (
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+                        {drinkStyleLabelList(item)}
+                      </p>
+                    ) : null}
                     <div className="mt-6 flex items-center justify-between border-t border-white/5 pt-4">
                       <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">
                         Available
