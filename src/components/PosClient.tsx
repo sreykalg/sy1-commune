@@ -157,6 +157,7 @@ export function PosClient({
   const [baristaUsername, setBaristaUsername] = useState("");
   const [baristaPassword, setBaristaPassword] = useState("");
   const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
+  const [onShift, setOnShift] = useState(clockedInBaristas);
   const [stylePick, setStylePick] = useState<MenuItem | null>(null);
   const [pending, startTransition] = useTransition();
   const labelPrinter = useLabelPrinter();
@@ -217,6 +218,13 @@ export function PosClient({
       return matchesCategory && matchesQuery;
     });
   }, [menu, category, query]);
+
+  useEffect(() => {
+    setOnShift((current) => {
+      const ids = new Set(clockedInBaristas.map((entry) => entry.id));
+      return [...clockedInBaristas, ...current.filter((entry) => !ids.has(entry.id))];
+    });
+  }, [clockedInBaristas]);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,16 +647,16 @@ export function PosClient({
                 setBaristaModalOpen(true);
               }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:opacity-50 ${
-                clockedInBaristas.length > 0
+                onShift.length > 0
                   ? "bg-white text-black hover:bg-neutral-200"
                   : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
               }`}
             >
-              {clockedInBaristas.length === 0
+              {onShift.length === 0
                 ? "Barista in"
-                : clockedInBaristas.length === 1
-                  ? `In - ${clockedInBaristas[0].name}`
-                  : `${clockedInBaristas.length} baristas in`}
+                : onShift.length === 1
+                  ? `In - ${onShift[0].name}`
+                  : `${onShift.length} baristas in`}
             </button>
             <button
               type="button"
@@ -760,6 +768,45 @@ export function PosClient({
               </button>
               <h2 className="text-xl font-semibold tracking-tight">Baristas</h2>
 
+              {onShift.length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">On shift</p>
+                  {onShift.map((barista) => (
+                    <div
+                      key={barista.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{barista.name}</p>
+                        <p className="truncate text-xs text-neutral-400">{barista.username}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const result = await punchBaristaShift({ type: "logout", userId: barista.id });
+                            if (result && "error" in result && result.error) {
+                              setBaristaNotice(result.error);
+                              return;
+                            }
+                            setOnShift((current) => current.filter((entry) => entry.id !== barista.id));
+                            setBaristaNotice(null);
+                            setMessage(`${barista.name} clocked out.`);
+                            router.refresh();
+                          })
+                        }
+                        className="shrink-0 rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:border-black disabled:opacity-40"
+                      >
+                        Out
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm text-neutral-500">No barista is on shift yet.</p>
+              )}
+
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -770,8 +817,22 @@ export function PosClient({
                       password: baristaPassword,
                     });
                     if (result && "error" in result && result.error) {
+                      if ("id" in result && result.id) {
+                        setOnShift((current) =>
+                          current.some((entry) => entry.id === result.id)
+                            ? current
+                            : [...current, { id: result.id, name: result.name, username: result.username }],
+                        );
+                      }
                       setBaristaNotice(result.error);
                       return;
+                    }
+                    if ("id" in result && result.id) {
+                      setOnShift((current) =>
+                        current.some((entry) => entry.id === result.id)
+                          ? current
+                          : [...current, { id: result.id, name: result.name, username: result.username }],
+                      );
                     }
                     setBaristaUsername("");
                     setBaristaPassword("");
@@ -780,7 +841,7 @@ export function PosClient({
                     router.refresh();
                   });
                 }}
-                className="mt-5"
+                className="mt-5 border-t border-neutral-100 pt-5"
               >
                 <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
                   Clock in

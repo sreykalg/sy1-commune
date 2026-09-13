@@ -41,14 +41,23 @@ async function requirePosSession() {
   return session;
 }
 
-function appendPunch(store: StoreData, user: StaffUser, type: "login" | "logout") {
+function compactStaffKey(value: string) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function looksLikeBarista(user: StaffUser) {
+  if (user.role === "barista") return true;
+  return /barista/i.test(`${user.title} ${user.username} ${user.name}`);
+}
+
+function appendPunch(store: StoreData, user: StaffUser, type: "login" | "logout", role = user.role) {
   if (!Array.isArray(store.loginActivity)) store.loginActivity = [];
   store.loginActivity.unshift({
     id: `auth-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     userId: user.id,
     username: user.username,
     name: user.name,
-    role: user.role,
+    role,
     type,
     at: new Date().toISOString(),
   });
@@ -242,18 +251,28 @@ export async function punchBaristaShift(input: {
   await requirePosSession();
 
   let error: string | undefined;
-  let punchedName: string | undefined;
+  let punched: { id: string; name: string; username: string } | undefined;
   await updateStore((store) => {
     const openShifts = openBaristaShifts(store.loginActivity ?? []);
 
     if (input.type === "login") {
       const username = String(input.username ?? "").trim().toLowerCase();
-      const password = String(input.password ?? "");
-      const user = store.users.find(
-        (entry) => entry.role === "barista" && entry.username === username && entry.password === password,
-      );
-      if (!user) {
+      const compact = compactStaffKey(username);
+      const password = String(input.password ?? "").trim();
+      const user = store.users.find((entry) => {
+        const entryUser = String(entry.username ?? "").trim().toLowerCase();
+        return (
+          entryUser === username ||
+          compactStaffKey(entry.username) === compact ||
+          compactStaffKey(entry.name) === compact
+        );
+      });
+      if (!user || String(user.password ?? "").trim() !== password) {
         error = "Barista username or password is incorrect.";
+        return;
+      }
+      if (user.role === "admin" || !looksLikeBarista(user)) {
+        error = "Use a barista account to clock in here.";
         return;
       }
       if (!user.password) {
@@ -261,11 +280,16 @@ export async function punchBaristaShift(input: {
         return;
       }
       if (openShifts.some((shift) => shift.userId === user.id)) {
+        punched = { id: user.id, name: user.name, username: user.username };
         error = `${user.name} is already clocked in.`;
         return;
       }
-      appendPunch(store, user, "login");
-      punchedName = user.name;
+      if (user.role !== "barista") {
+        user.role = "barista";
+        user.title = "Barista";
+      }
+      appendPunch(store, user, "login", "barista");
+      punched = { id: user.id, name: user.name, username: user.username };
       return;
     }
 
@@ -280,13 +304,17 @@ export async function punchBaristaShift(input: {
       error = "Barista account not found.";
       return;
     }
-    appendPunch(store, user, "logout");
-    punchedName = user.name;
+    appendPunch(store, user, "logout", "barista");
+    punched = { id: user.id, name: user.name, username: user.username };
   });
 
-  if (error) return { error };
+  if (error) {
+    return punched
+      ? { error, id: punched.id, name: punched.name, username: punched.username }
+      : { error };
+  }
   refresh();
-  return { ok: true as const, name: punchedName ?? "" };
+  return { ok: true as const, id: punched?.id ?? "", name: punched?.name ?? "", username: punched?.username ?? "" };
 }
 
 export async function updateStaffSessionTimes(input: {
