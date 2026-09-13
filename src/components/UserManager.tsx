@@ -453,7 +453,6 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                                     title="Delete in / out record"
                                     disabled={pending}
                                     onClick={() => {
-                                      if (!window.confirm(`Delete this in / out record for ${row.name}?`)) return;
                                       startTransition(async () => {
                                         const result = await deleteStaffSession({
                                           loginId: row.loginId ?? undefined,
