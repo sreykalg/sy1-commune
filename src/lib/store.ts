@@ -156,6 +156,7 @@ function emptyStore(): StoreData {
     costings: structuredClone(DEFAULT_COSTINGS),
     loginActivity: [],
     offRequests: [],
+    voidRequests: [],
     loginGates: { ...DEFAULT_LOGIN_GATES },
   };
 }
@@ -239,6 +240,9 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.offRequests)) {
     store.offRequests = [];
+  }
+  if (!Array.isArray(store.voidRequests)) {
+    store.voidRequests = [];
   }
   store.loginGates = normalizeLoginGates(store.loginGates);
 

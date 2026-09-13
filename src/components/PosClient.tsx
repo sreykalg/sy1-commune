@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { logout } from "@/actions/auth";
-import { createOrder, openPos, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
+import { createOrder, openPos, requestVoidApproval, verifyManager, voidCheckout, voidOrder } from "@/actions/pos";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { formatMoney } from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
@@ -306,6 +306,40 @@ export function PosClient({
     });
   }
 
+  function handleRequestAdmin() {
+    if (!voidReason.trim()) {
+      setMessage("Enter a reason for voiding.");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await requestVoidApproval({
+        reason: voidReason,
+        orderId: cart.length > 0 ? null : voidTargetId || lastOrderId,
+        cart: cart.length > 0 ? cart : undefined,
+        promoId,
+        paymentMethod,
+      });
+      if (result && "error" in result && result.error) {
+        setMessage(result.error);
+        return;
+      }
+      if (cart.length > 0) {
+        setCart([]);
+        setTendered("");
+        setPaymentMethod("cash");
+        setPromoId(null);
+        setPromoOpen(false);
+      }
+      setVoidUsername("");
+      setVoidPassword("");
+      setVoidReason("");
+      setVoidTargetId(null);
+      setVoidModalOpen(false);
+      setMessage("Void request sent to admin.");
+    });
+  }
+
   function currentTicket(): ReceiptTicket {
     return {
       ticketNo: nextTicketNo(orders),
@@ -446,7 +480,7 @@ export function PosClient({
                 <p className="mt-1 text-xs text-neutral-500">
                   {isManager
                     ? "This cannot be undone."
-                    : "Manager approval required to void."}
+                    : "Ask a manager, or send a request to admin."}
                 </p>
               </div>
 
@@ -526,20 +560,32 @@ export function PosClient({
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVoidModalOpen(false)}
-                  className="w-1/3 rounded-xl border border-neutral-200 py-2.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="w-2/3 rounded-xl bg-black py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99]"
-                >
-                  {isManager ? "Void ticket" : "Confirm Void"}
-                </button>
+              <div className="mt-6 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVoidModalOpen(false)}
+                    className="w-1/3 rounded-xl border border-neutral-200 py-2.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-2/3 rounded-xl bg-black py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99]"
+                  >
+                    {isManager ? "Void ticket" : "Confirm Void"}
+                  </button>
+                </div>
+                {!isManager ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={handleRequestAdmin}
+                    className="rounded-xl border border-neutral-300 py-2.5 text-xs font-medium text-neutral-700 transition hover:border-black hover:text-black disabled:opacity-40"
+                  >
+                    Request admin
+                  </button>
+                ) : null}
               </div>
             </form>
           </div>

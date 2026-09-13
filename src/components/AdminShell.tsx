@@ -6,6 +6,7 @@ import { StaffHeader, type AdminPanel } from "@/components/StaffHeader";
 import { UserManager } from "@/components/UserManager";
 import { SalePurchaseTransactions } from "@/components/SalePurchaseTransactions";
 import { MenuCatalog } from "@/components/MenuCatalog";
+import { VoidRequestApproval } from "@/components/VoidRequestApproval";
 import type { PublicStaffUser } from "@/lib/users";
 import type { Session, StoreData } from "@/lib/types";
 
@@ -20,7 +21,9 @@ function readSavedPanel(): AdminPanel {
   const savedPanel = window.localStorage.getItem("admin_activePanel");
   const savedSection = window.localStorage.getItem("admin_section");
   if (savedPanel === "staff" || savedSection === "staff") return "staff";
-  if (savedPanel === "menu" || savedPanel === "transactions") return savedPanel;
+  if (savedPanel === "menu" || savedPanel === "transactions" || savedPanel === "voids") {
+    return savedPanel;
+  }
   return "sales";
 }
 
@@ -30,7 +33,7 @@ export function AdminShell({ session, users, store, children }: AdminShellProps)
   const router = useRouter();
 
   useEffect(() => {
-    if (panel !== "transactions" && panel !== "sales") return;
+    if (panel !== "transactions" && panel !== "sales" && panel !== "voids") return;
     const refreshTimer = window.setInterval(() => router.refresh(), 5000);
     return () => window.clearInterval(refreshTimer);
   }, [panel, router]);
@@ -64,6 +67,7 @@ export function AdminShell({ session, users, store, children }: AdminShellProps)
       {current === "sales" ? children : null}
       {current === "menu" ? <MenuCatalog menu={store.menu} categories={store.categories} /> : null}
       {current === "transactions" ? <SalePurchaseTransactions store={store} /> : null}
+      {current === "voids" ? <VoidRequestApproval requests={store.voidRequests ?? []} /> : null}
     </>
   );
 }

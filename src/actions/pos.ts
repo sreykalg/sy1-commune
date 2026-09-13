@@ -384,3 +384,151 @@ export async function voidCheckout(
   revalidatePath("/admin");
   return { ok: true, id: createdId };
 }
+
+export async function requestVoidApproval(input: {
+  reason: string;
+  orderId?: string | null;
+  cart?: OrderItem[];
+  promoId?: string | null;
+  paymentMethod?: string | null;
+}) {
+  const session = await requireCashier();
+  const reason = input.reason.trim();
+  if (!reason) {
+    return { error: "Enter a reason for voiding." };
+  }
+
+  const cart = Array.isArray(input.cart) ? input.cart : [];
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    if (!Array.isArray(store.voidRequests)) store.voidRequests = [];
+
+    if (cart.length > 0) {
+      const items = cart.flatMap((line) => {
+        const qty = Number(line.qty);
+        if (!Number.isSafeInteger(qty) || qty < 1) return [];
+        return [{ productId: line.productId, name: line.name, qty, price: line.price }];
+      });
+      if (items.length === 0) {
+        error = "No items to void.";
+        return;
+      }
+      store.voidRequests.unshift({
+        id: `voidreq-${Date.now().toString(36)}`,
+        kind: "checkout",
+        cashierId: session.userId,
+        cashierName: session.name,
+        reason,
+        items,
+        total: items.reduce((sum, item) => sum + item.price * item.qty, 0),
+        promoId: input.promoId ?? null,
+        paymentMethod: parsePayment(input.paymentMethod),
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const orderId = input.orderId?.trim();
+    if (!orderId) {
+      error = "No ticket to void.";
+      return;
+    }
+    const order = store.orders.find((entry) => entry.id === orderId);
+    if (!order) {
+      error = "Ticket not found.";
+      return;
+    }
+    if (order.voided) {
+      error = "That ticket is already voided.";
+      return;
+    }
+    if (store.voidRequests.some((entry) => entry.status === "pending" && entry.orderId === orderId)) {
+      error = "A void request for this ticket is already waiting.";
+      return;
+    }
+    store.voidRequests.unshift({
+      id: `voidreq-${Date.now().toString(36)}`,
+      kind: "order",
+      orderId: order.id,
+      ticketNo: order.ticketNo,
+      cashierId: session.userId,
+      cashierName: session.name,
+      reason,
+      items: order.items,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function setVoidRequestStatus(id: string, status: "approved" | "denied") {
+  await requireAdmin();
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    if (!Array.isArray(store.voidRequests)) store.voidRequests = [];
+    const request = store.voidRequests.find((entry) => entry.id === id);
+    if (!request) {
+      error = "Void request not found.";
+      return;
+    }
+    if (request.status !== "pending") {
+      error = "That request was already handled.";
+      return;
+    }
+    if (status === "denied") {
+      request.status = "denied";
+      return;
+    }
+
+    if (request.kind === "order" && request.orderId) {
+      const order = store.orders.find((entry) => entry.id === request.orderId);
+      if (!order) {
+        error = "Ticket not found.";
+        return;
+      }
+      order.voided = true;
+      order.voidReason = request.reason;
+    } else {
+      store.orders.push({
+        id: `ord-${Date.now()}`,
+        createdAt: request.createdAt,
+        baristaName: request.cashierName,
+        items: request.items,
+        subtotal: request.total,
+        discount: 0,
+        total: request.total,
+        paymentMethod: request.paymentMethod ?? "cash",
+        ticketNo: nextTicketNo(store.orders),
+        paid: 0,
+        change: 0,
+        voided: true,
+        voidReason: request.reason,
+      });
+    }
+    request.status = "approved";
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function deleteVoidRequest(id: string) {
+  await requireAdmin();
+  await updateStore((store) => {
+    store.voidRequests = (store.voidRequests ?? []).filter((entry) => entry.id !== id);
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
