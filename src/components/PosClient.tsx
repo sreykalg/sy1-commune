@@ -20,7 +20,19 @@ import {
   SalePurchaseTransactions,
   type InventoryTab,
 } from "@/components/SalePurchaseTransactions";
-import { drinkStyleLabel, formatMoney, normalizeMenuStyles } from "@/lib/menu";
+import {
+  addonAllowsQty,
+  cartLineKey,
+  cartLineUnitPrice,
+  drinkDisplayName,
+  drinkStyleLabel,
+  formatMoney,
+  normalizeMenuAddons,
+  normalizeMenuStyles,
+  orderLineListLabel,
+  orderLineOptionsLabel,
+  resolveOrderAddons,
+} from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
 import {
@@ -33,6 +45,7 @@ import type {
   DrinkStyle,
   MenuItem,
   Order,
+  OrderAddon,
   OrderItem,
   PaymentMethod,
   PrintJob,
@@ -90,6 +103,7 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
       const qty = Math.floor(Number(item.qty));
       if (!Number.isFinite(qty) || qty < 1) return [];
       const style = item.style === "hot" || item.style === "iced" ? item.style : undefined;
+      const addons = resolveOrderAddons(product, item.addons);
       return [
         {
           productId: product.id,
@@ -97,6 +111,7 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
           qty,
           price: product.price,
           style,
+          addons,
         },
       ];
     });
@@ -158,7 +173,11 @@ export function PosClient({
   const [baristaPassword, setBaristaPassword] = useState("");
   const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
   const [onShift, setOnShift] = useState(clockedInBaristas);
-  const [stylePick, setStylePick] = useState<MenuItem | null>(null);
+  const [drinkPick, setDrinkPick] = useState<{
+    item: MenuItem;
+    style?: DrinkStyle;
+    addons: Record<string, number>;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   const labelPrinter = useLabelPrinter();
   const receiptPrinter = useReceiptPrinter();
@@ -274,7 +293,7 @@ export function PosClient({
     };
   }, [promoId, promotions]);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = cart.reduce((sum, item) => sum + cartLineUnitPrice(item) * item.qty, 0);
   const promo = activePromos.find((item) => item.id === promoId) ?? null;
   const discount = promo
     ? promo.type === "percent"
@@ -298,7 +317,7 @@ export function PosClient({
           String(order.ticketNo ?? ""),
           order.baristaName,
           formatMoney(order.total),
-          ...order.items.map((item) => `${item.qty} ${item.name}`),
+          ...order.items.map((item) => `${item.qty} ${orderLineListLabel(item)}`),
         ]
           .join(" ")
           .toLowerCase();
@@ -347,26 +366,56 @@ export function PosClient({
     setMessage("Admin approved the void. The checkout has been voided.");
   }, [activeVoidRequest, activeVoidRequestId, lastOrderId]);
 
-  function addItem(id: string, name: string, price: number, style?: DrinkStyle) {
+  function selectedAddonsFor(item: MenuItem, selected: Record<string, number>): OrderAddon[] {
+    return resolveOrderAddons(
+      item,
+      normalizeMenuAddons(item).map((addon) => ({
+        id: addon.id,
+        name: addon.name,
+        price: addon.price,
+        qty: selected[addon.id] ?? 0,
+      })),
+    );
+  }
+
+  function addItem(id: string, name: string, price: number, style?: DrinkStyle, addons: OrderAddon[] = []) {
     if (!pos.isOpen || isManager || voidRequestPending) {
       return;
     }
+    const nextLine = { productId: id, name, qty: 1, price, style, addons };
+    const nextKey = cartLineKey(nextLine);
     setCart((current) => {
-      const existing = current.find((item) => item.productId === id && item.style === style);
+      const existing = current.find((item) => cartLineKey(item) === nextKey);
       if (existing) {
         return current.map((item) =>
-          item.productId === id && item.style === style ? { ...item, qty: item.qty + 1 } : item,
+          cartLineKey(item) === nextKey ? { ...item, qty: item.qty + 1 } : item,
         );
       }
-      return [...current, { productId: id, name, qty: 1, price, style }];
+      return [...current, nextLine];
     });
     setMessage(null);
   }
 
+  function confirmDrinkPick(pick: { item: MenuItem; style?: DrinkStyle; addons: Record<string, number> }) {
+    addItem(
+      pick.item.id,
+      pick.item.name,
+      pick.item.price,
+      pick.style,
+      selectedAddonsFor(pick.item, pick.addons),
+    );
+    setDrinkPick(null);
+  }
+
   function handleMenuTap(item: MenuItem) {
     const styles = normalizeMenuStyles(item);
-    if (styles.length > 1) {
-      setStylePick(item);
+    const addons = normalizeMenuAddons(item);
+    if (styles.length > 1 || addons.length > 0) {
+      setDrinkPick({
+        item,
+        style: styles.length === 1 ? styles[0] : undefined,
+        addons: {},
+      });
       return;
     }
     addItem(item.id, item.name, item.price, styles[0]);
@@ -723,34 +772,139 @@ export function PosClient({
           </div>
         </header>
 
-        {stylePick ? (
+        {drinkPick ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
             <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
               <button
                 type="button"
-                aria-label="Close drink type"
-                onClick={() => setStylePick(null)}
+                aria-label="Close drink options"
+                onClick={() => setDrinkPick(null)}
                 className="absolute top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black"
               >
                 ×
               </button>
-              <h2 className="text-xl font-semibold tracking-tight">{stylePick.name}</h2>
-              <p className="mt-1 text-sm text-neutral-500">Choose Iced or Hot.</p>
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                {normalizeMenuStyles(stylePick).map((style) => (
+              <h2 className="text-xl font-semibold tracking-tight">{drinkPick.item.name}</h2>
+              {normalizeMenuStyles(drinkPick.item).length > 1 ? (
+                <>
+                  <p className="mt-1 text-sm text-neutral-500">Choose Iced or Hot.</p>
+                  <div className="mt-5 grid grid-cols-2 gap-2">
+                    {normalizeMenuStyles(drinkPick.item).map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...drinkPick, style };
+                          if (normalizeMenuAddons(drinkPick.item).length === 0) {
+                            confirmDrinkPick(next);
+                            return;
+                          }
+                          setDrinkPick(next);
+                        }}
+                        className={`rounded-2xl border px-4 py-4 text-sm font-medium ${
+                          drinkPick.style === style
+                            ? "border-black bg-black text-white"
+                            : "border-neutral-200 hover:border-black hover:bg-black hover:text-white"
+                        }`}
+                      >
+                        {drinkStyleLabel(style)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-neutral-500">Add extras if you want them.</p>
+              )}
+              {normalizeMenuAddons(drinkPick.item).length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-sm text-neutral-500">Add-ons</p>
+                  {normalizeMenuAddons(drinkPick.item).map((addon) => {
+                    const qty = drinkPick.addons[addon.id] ?? 0;
+                    const on = qty > 0;
+                    const canQty = addonAllowsQty(addon);
+                    return (
+                      <button
+                        key={addon.id}
+                        type="button"
+                        onClick={() =>
+                          setDrinkPick({
+                            ...drinkPick,
+                            addons: { ...drinkPick.addons, [addon.id]: on ? 0 : 1 },
+                          })
+                        }
+                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                          on ? "border-black bg-neutral-50" : "border-neutral-200 bg-white"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{addon.name}</p>
+                          <p className="mt-0.5 text-[11px] text-neutral-500">
+                            {qty > 1
+                              ? `x${qty} · +₱${(addon.price || 0) * qty}`
+                              : `+₱${addon.price || 0}${canQty ? " each" : ""}`}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {canQty && on ? (
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <span
+                                role="button"
+                                onClick={() =>
+                                  setDrinkPick({
+                                    ...drinkPick,
+                                    addons: {
+                                      ...drinkPick.addons,
+                                      [addon.id]: Math.max(0, qty - 1),
+                                    },
+                                  })
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 text-sm"
+                              >
+                                −
+                              </span>
+                              <span className="w-4 text-center text-xs font-medium">{qty}</span>
+                              <span
+                                role="button"
+                                onClick={() =>
+                                  setDrinkPick({
+                                    ...drinkPick,
+                                    addons: {
+                                      ...drinkPick.addons,
+                                      [addon.id]: Math.min(9, qty + 1),
+                                    },
+                                  })
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 text-sm"
+                              >
+                                +
+                              </span>
+                            </div>
+                          ) : null}
+                          <span
+                            className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                              on ? "border-black" : "border-neutral-300"
+                            }`}
+                          >
+                            {on ? <span className="h-2.5 w-2.5 rounded-full bg-black" /> : null}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                   <button
-                    key={style}
                     type="button"
-                    onClick={() => {
-                      addItem(stylePick.id, stylePick.name, stylePick.price, style);
-                      setStylePick(null);
-                    }}
-                    className="rounded-2xl border border-neutral-200 px-4 py-4 text-sm font-medium hover:border-black hover:bg-black hover:text-white"
+                    disabled={
+                      normalizeMenuStyles(drinkPick.item).length > 1 && !drinkPick.style
+                    }
+                    onClick={() => confirmDrinkPick(drinkPick)}
+                    className="mt-2 w-full rounded-2xl bg-black px-4 py-3 text-sm font-medium text-white disabled:opacity-40"
                   >
-                    {drinkStyleLabel(style)}
+                    Add to checkout
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -953,7 +1107,7 @@ export function PosClient({
                         {phDateTimeLabel(selectedVoidOrder.createdAt)} · {selectedVoidOrder.baristaName}
                       </p>
                       <p className="mt-2 text-xs text-neutral-700">
-                        {selectedVoidOrder.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                        {selectedVoidOrder.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                       </p>
                     </>
                   ) : lastTicket ? (
@@ -963,7 +1117,7 @@ export function PosClient({
                         <p className="text-sm font-semibold">{formatMoney(lastTicket.total)}</p>
                       </div>
                       <p className="mt-2 text-xs text-neutral-700">
-                        {lastTicket.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                        {lastTicket.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                       </p>
                     </>
                   ) : null}
@@ -1210,7 +1364,7 @@ export function PosClient({
                             <p className="text-base font-semibold">{formatMoney(order.total)}</p>
                           </div>
                           <p className="mt-2 text-sm text-neutral-700">
-                            {order.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                            {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                           </p>
                           <p className="mt-1 text-xs text-neutral-400">{paymentLabel(order.paymentMethod)}</p>
                           <button
@@ -1252,7 +1406,7 @@ export function PosClient({
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">{order.baristaName}</td>
                               <td className="max-w-[320px] px-4 py-4 text-neutral-700">
-                                {order.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                                {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
                                 {paymentLabel(order.paymentMethod)}
@@ -1324,7 +1478,10 @@ export function PosClient({
                       {normalizeMenuStyles(item).length > 0 ? (
                         <p className="mt-0.5 text-[10px] text-neutral-400">
                           {normalizeMenuStyles(item).map(drinkStyleLabel).join(" / ")}
+                          {normalizeMenuAddons(item).length > 0 ? " · Add-ons" : ""}
                         </p>
+                      ) : normalizeMenuAddons(item).length > 0 ? (
+                        <p className="mt-0.5 text-[10px] text-neutral-400">Add-ons</p>
                       ) : null}
                       <p className="mt-0.5 text-xs text-neutral-600">
                         {formatMoney(item.price)}
@@ -1374,18 +1531,20 @@ export function PosClient({
               ) : (
                 cart.map((item) => (
                   <li
-                    key={`${item.productId}-${item.style ?? "plain"}`}
+                    key={cartLineKey(item)}
                     className="grid grid-cols-[1fr_auto_auto] items-start gap-x-3 border-b border-neutral-100 py-1.5 last:border-none"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-xs">{item.name}</p>
-                      {item.style ? (
-                        <p className="text-[10px] text-neutral-600">{drinkStyleLabel(item.style)}</p>
+                      <p className="truncate text-xs">{drinkDisplayName(item)}</p>
+                      {orderLineOptionsLabel(item) ? (
+                        <p className="text-[10px] leading-4 text-neutral-600">
+                          {orderLineOptionsLabel(item)}
+                        </p>
                       ) : null}
                     </div>
                     <span className="w-16 text-center text-xs">{item.qty}</span>
                     <span className="w-16 text-right text-xs">
-                      {formatMoney(item.price * item.qty)}
+                      {formatMoney(cartLineUnitPrice(item) * item.qty)}
                     </span>
                   </li>
                 ))

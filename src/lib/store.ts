@@ -12,7 +12,7 @@ import type {
   StoreData,
 } from "@/lib/types";
 import { CUP_SKUS, cupSkuForItem } from "@/lib/inventory";
-import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuStyles } from "@/lib/menu";
+import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { DEFAULT_LOGIN_GATES, normalizeLoginGates } from "@/lib/staff-gates";
 import { DEFAULT_PROMOS } from "@/lib/promos";
@@ -277,6 +277,7 @@ function normalizeStore(store: StoreData): StoreData {
         available: item.available !== false,
         image: item.image || "/images/drinks.jpg",
         styles: normalizeMenuStyles(item),
+        addons: normalizeMenuAddons(item),
       }));
     if (store.menu.length === 0) {
       store.menu = DEFAULT_MENU.map((item) => ({ ...item }));

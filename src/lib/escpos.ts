@@ -1,6 +1,7 @@
 import { CAFE } from "@/lib/cafe";
 import { ordersOnDay } from "@/lib/analytics";
 import { paymentLabel } from "@/lib/payments";
+import { drinkDisplayName, orderLineOptionsLabel } from "@/lib/menu";
 import type { MenuItem, Order, OrderItem, PaymentMethod } from "@/lib/types";
 
 export type PaperWidth = 58 | 80;
@@ -229,7 +230,11 @@ export function customerLines(
   ];
 
   for (const item of ticket.items) {
-    lines.push({ kind: "text", text: item.name });
+    lines.push({ kind: "text", text: drinkDisplayName(item) });
+    const options = orderLineOptionsLabel(item);
+    if (options) {
+      lines.push({ kind: "text", text: `  ${options}` });
+    }
     lines.push({
       kind: "text",
       text: padLine(
@@ -308,11 +313,15 @@ export function baristaLines(ticket: ReceiptTicket): PrintLine[] {
 
   for (const item of ticket.items) {
     const qty = `${item.qty}x`;
-    const name = item.name.toUpperCase();
+    const name = drinkDisplayName(item).toUpperCase();
+    const options = orderLineOptionsLabel(item);
     lines.push({
       kind: "text",
       text: `${qty.padEnd(4, " ")} ${name}`,
     });
+    if (options) {
+      lines.push({ kind: "text", text: `     ${options.toUpperCase()}` });
+    }
   }
 
   lines.push({ kind: "rule" });

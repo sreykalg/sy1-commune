@@ -1,4 +1,5 @@
 import { phDateString, phTimestamp } from "@/lib/datetime";
+import { normalizeMenuAddons } from "@/lib/menu";
 import type {
   CostingIngredient,
   CostingItem,
@@ -306,6 +307,19 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
 
   if (isDrinkCategory(category)) {
     addInventory(cupForDrink(category, styleFromLine(line), peta, daba, hot), 1, "pcs");
+  }
+
+  const addonCatalog = normalizeMenuAddons(menuItem);
+  for (const selected of line.addons ?? []) {
+    const qty = Math.max(1, Math.floor(Number(selected.qty) || 1));
+    const spec = addonCatalog.find((addon) => addon.id === selected.id);
+    const inventory = findInventory(store.inventory, (item) => {
+      if (spec?.inventoryItemId) return item.id === spec.inventoryItemId;
+      return namesMatch(item.name, selected.name) || namesMatch(item.name, spec?.name ?? "");
+    });
+    if (!inventory) continue;
+    const recipe = costingIngredientForItem(store.costings, inventory.name);
+    addInventory(inventory, (recipe ? perCupAmount(recipe) : 1) * qty, recipe?.unit || inventory.unit);
   }
 
   return ingredients;

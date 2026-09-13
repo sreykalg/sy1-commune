@@ -9,6 +9,21 @@ export type Session = {
 
 export type DrinkStyle = "iced" | "hot";
 
+export type MenuAddon = {
+  id: string;
+  name: string;
+  price: number;
+  qtyEnabled?: boolean;
+  inventoryItemId?: string;
+};
+
+export type OrderAddon = {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
+};
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -17,6 +32,7 @@ export type MenuItem = {
   image: string;
   available: boolean;
   styles?: DrinkStyle[];
+  addons?: MenuAddon[];
 };
 
 export type OrderItem = {
@@ -26,6 +42,7 @@ export type OrderItem = {
   price: number;
   style?: DrinkStyle;
   category?: string;
+  addons?: OrderAddon[];
 };
 
 export type PaymentMethod = "cash" | "gcash" | "maya";

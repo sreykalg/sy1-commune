@@ -11,6 +11,7 @@ import {
   type PaperWidth,
   type ReceiptTicket,
 } from "@/lib/escpos";
+import { drinkDisplayName, orderLineOptionsLabel } from "@/lib/menu";
 import { paymentLabel } from "@/lib/payments";
 import type { PrintJob } from "@/lib/types";
 
@@ -101,7 +102,10 @@ function CustomerSlip({ ticket }: { ticket: ReceiptTicket }) {
       <Row left="Item" right="Amount" strong />
       {ticket.items.map((item, index) => (
         <div key={`${item.productId}-${index}`} className="mt-2">
-          <p>{item.name}</p>
+          <p>{drinkDisplayName(item)}</p>
+          {orderLineOptionsLabel(item) ? (
+            <p className="text-[10px] text-neutral-600">{orderLineOptionsLabel(item)}</p>
+          ) : null}
           <Row
             left={`  ${item.qty} x ${receiptMoney(item.price)}`}
             right={receiptMoney(item.price * item.qty)}
@@ -200,7 +204,14 @@ function BaristaSlip({ ticket }: { ticket: ReceiptTicket }) {
             className="flex items-baseline gap-2 border-b border-dashed border-neutral-200 py-1"
           >
             <span className="w-8 shrink-0 font-bold">{item.qty}x</span>
-            <span className="min-w-0 leading-4 uppercase">{item.name}</span>
+            <span className="min-w-0 leading-4 uppercase">
+              {drinkDisplayName(item)}
+              {orderLineOptionsLabel(item) ? (
+                <span className="mt-0.5 block text-[10px] font-normal normal-case text-neutral-600">
+                  {orderLineOptionsLabel(item)}
+                </span>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>
