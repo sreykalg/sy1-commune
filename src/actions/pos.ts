@@ -38,6 +38,27 @@ async function requireAdmin() {
   if (!session || session.role !== "admin") {
     throw new Error("Only an admin can change store records.");
   }
+  return session;
+}
+
+function markOrderVoided(store: StoreData, orderId: string, reason: string) {
+  const order = store.orders.find((entry) => entry.id === orderId);
+  if (!order) return "Ticket not found.";
+  if (order.voided) return "Ticket is already voided.";
+
+  order.voided = true;
+  order.voidReason = reason;
+  const updatedAt = new Date().toISOString();
+  for (const job of store.printJobs) {
+    if (
+      job.orderId === orderId &&
+      (job.status === "pending" || job.status === "failed")
+    ) {
+      job.status = "cancelled";
+      job.updatedAt = updatedAt;
+      job.lastError = "Order was voided.";
+    }
+  }
 }
 
 function labelJobsForOrder(
@@ -367,24 +388,176 @@ export async function voidOrder(
   let error: string | undefined;
 
   await updateStore((store) => {
-    const order = store.orders.find((entry) => entry.id === orderId);
-    if (!order) {
+    error = markOrderVoided(store, orderId, reason.trim());
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function requestVoidApproval(
+  cart: OrderItem[],
+  reason: string,
+  orderId?: string | null,
+  promoId?: string | null,
+  paymentMethod?: string | null,
+) {
+  const session = await requireCashier();
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { error: "Enter a reason for voiding." };
+
+  let error: string | undefined;
+  let requestId = "";
+
+  await updateStore((store) => {
+    if (
+      store.voidRequests.some(
+        (request) =>
+          request.requestedById === session.userId && request.status === "pending",
+      )
+    ) {
+      error = "You already have a void request waiting for admin approval.";
+      return;
+    }
+
+    const existingOrder = orderId
+      ? store.orders.find((order) => order.id === orderId)
+      : undefined;
+    if (orderId && !existingOrder) {
       error = "Ticket not found.";
       return;
     }
-    order.voided = true;
-    order.voidReason = reason.trim();
-    const updatedAt = new Date().toISOString();
-    for (const job of store.printJobs) {
-      if (
-        job.orderId === orderId &&
-        (job.status === "pending" || job.status === "failed")
-      ) {
-        job.status = "cancelled";
-        job.updatedAt = updatedAt;
-        job.lastError = "Order was voided.";
-      }
+    if (existingOrder?.voided) {
+      error = "Ticket is already voided.";
+      return;
     }
+
+    let items: OrderItem[] = [];
+    let subtotal = 0;
+    let discount = 0;
+    let promoLabel: string | undefined;
+    let total = 0;
+    let requestedPayment = parsePayment(paymentMethod);
+
+    if (existingOrder) {
+      items = existingOrder.items.map((item) => ({ ...item }));
+      subtotal = existingOrder.subtotal ?? existingOrder.total;
+      discount = existingOrder.discount ?? 0;
+      promoLabel = existingOrder.promoLabel;
+      total = existingOrder.total;
+      requestedPayment = parsePayment(existingOrder.paymentMethod);
+    } else {
+      if (cart.length === 0) {
+        error = "No items to void.";
+        return;
+      }
+      for (const line of cart) {
+        const menuItem = store.menu.find((item) => item.id === line.productId);
+        const qty = Number(line.qty);
+        if (!menuItem) {
+          error = "One of the items is no longer on the menu.";
+          return;
+        }
+        if (!Number.isSafeInteger(qty) || qty < 1 || qty > 99) {
+          error = "Each item quantity must be a whole number from 1 to 99.";
+          return;
+        }
+        items.push({
+          productId: menuItem.id,
+          name: menuItem.name,
+          qty,
+          price: menuItem.price,
+          category: menuItem.category,
+        });
+      }
+      subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const promotion = promoId
+        ? store.promotions.find((entry) => entry.id === promoId && entry.active)
+        : undefined;
+      if (promotion) {
+        promoLabel = promotion.label;
+        discount =
+          promotion.type === "percent"
+            ? Math.round((subtotal * promotion.value) / 100)
+            : Math.min(subtotal, Math.round(promotion.value));
+      }
+      total = Math.max(0, subtotal - discount);
+    }
+
+    requestId = `void-request-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+    store.voidRequests.unshift({
+      id: requestId,
+      requestedAt: new Date().toISOString(),
+      requestedById: session.userId,
+      requestedByName: session.name,
+      reason: trimmedReason,
+      status: "pending",
+      orderId: existingOrder?.id,
+      items,
+      subtotal,
+      discount,
+      promoLabel,
+      total,
+      paymentMethod: requestedPayment,
+    });
+  });
+
+  if (error) return { error };
+  revalidatePath("/pos");
+  revalidatePath("/admin");
+  return { ok: true, requestId };
+}
+
+export async function approveVoidRequest(requestId: string) {
+  const session = await requireAdmin();
+  let error: string | undefined;
+
+  await updateStore((store) => {
+    const request = store.voidRequests.find((entry) => entry.id === requestId);
+    if (!request) {
+      error = "Void request not found.";
+      return;
+    }
+    if (request.status !== "pending") {
+      error = "Void request is already approved.";
+      return;
+    }
+
+    if (request.orderId) {
+      error = markOrderVoided(store, request.orderId, request.reason);
+      if (error) return;
+      request.processedOrderId = request.orderId;
+    } else {
+      const createdAt = new Date().toISOString();
+      const createdId = `ord-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 7)}`;
+      store.orders.push({
+        id: createdId,
+        createdAt,
+        baristaName: request.requestedByName,
+        items: request.items.map((item) => ({ ...item })),
+        subtotal: request.subtotal,
+        discount: request.discount,
+        promoLabel: request.promoLabel,
+        total: request.total,
+        paymentMethod: request.paymentMethod,
+        ticketNo: nextTicketNo(store.orders),
+        paid: 0,
+        change: 0,
+        voided: true,
+        voidReason: request.reason,
+      });
+      request.processedOrderId = createdId;
+    }
+
+    request.status = "approved";
+    request.approvedAt = new Date().toISOString();
+    request.approvedByName = session.name;
   });
 
   if (error) return { error };

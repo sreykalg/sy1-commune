@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { approveVoidRequest } from "@/actions/pos";
 import { formatMoney } from "@/lib/menu";
+import { phDateTimeLabel } from "@/lib/datetime";
 import { paymentLabel } from "@/lib/payments";
 import {
   bestSellers,
@@ -152,6 +154,8 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   const [filterDateStr, setFilterDateStr] = useState("");
   const [rangeType, setRangeType] = useState<string>("today");
   const [activeFilterMode, setActiveFilterMode] = useState<"range" | "date">("range");
+  const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
+  const [approvalPending, startApprovalTransition] = useTransition();
 
   const [expenses, setExpenses] = useState<CustomEntry[]>([]);
   const [credits, setCredits] = useState<CustomEntry[]>([]);
@@ -367,6 +371,9 @@ export function AdminDashboard({ store }: { store: StoreData }) {
       return orderTime >= startOfPeriod.getTime() && orderTime <= now.getTime();
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const pendingVoidRequests = (store.voidRequests ?? []).filter(
+    (request) => request.status === "pending",
+  );
 
   const handleAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -490,6 +497,66 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           </p>
         </div>
       </div>
+
+      {pendingVoidRequests.length > 0 ? (
+        <section className="border border-neutral-300 bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-neutral-200 pb-3">
+            <div>
+              <p className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
+                Void approvals
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">Requests waiting for admin</h2>
+            </div>
+            <span className="rounded-full bg-black px-3 py-1 text-xs font-medium text-white">
+              {pendingVoidRequests.length} pending
+            </span>
+          </div>
+
+          {approvalMessage ? (
+            <p className="mt-3 text-sm text-neutral-600">{approvalMessage}</p>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {pendingVoidRequests.map((request) => (
+              <article key={request.id} className="border border-neutral-200 bg-neutral-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{request.requestedByName}</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      {phDateTimeLabel(request.requestedAt)}
+                      {request.orderId ? " · Existing ticket" : " · Current checkout"}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold">{formatMoney(request.total)}</p>
+                </div>
+                <p className="mt-3 text-sm text-neutral-700">
+                  {request.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                </p>
+                <p className="mt-2 text-xs text-neutral-500">
+                  Reason: {request.reason}
+                </p>
+                <button
+                  type="button"
+                  disabled={approvalPending}
+                  onClick={() =>
+                    startApprovalTransition(async () => {
+                      const result = await approveVoidRequest(request.id);
+                      if ("error" in result && result.error) {
+                        setApprovalMessage(result.error);
+                        return;
+                      }
+                      setApprovalMessage(`Void approved for ${request.requestedByName}.`);
+                    })
+                  }
+                  className="mt-4 w-full rounded-lg bg-black px-4 py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 disabled:opacity-40"
+                >
+                  {approvalPending ? "Processing..." : "Approve void"}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">

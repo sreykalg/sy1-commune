@@ -157,6 +157,7 @@ function emptyStore(): StoreData {
     costings: structuredClone(DEFAULT_COSTINGS),
     loginActivity: [],
     offRequests: [],
+    voidRequests: [],
     loginGates: { ...DEFAULT_LOGIN_GATES },
   };
 }
@@ -263,6 +264,17 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.offRequests)) {
     store.offRequests = [];
+  }
+  if (!Array.isArray(store.voidRequests)) {
+    store.voidRequests = [];
+  } else {
+    store.voidRequests = store.voidRequests.filter(
+      (request) =>
+        request &&
+        typeof request.id === "string" &&
+        (request.status === "pending" || request.status === "approved") &&
+        Array.isArray(request.items),
+    );
   }
   store.loginGates = normalizeLoginGates(store.loginGates);
 

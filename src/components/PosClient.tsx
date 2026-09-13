@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { logout } from "@/actions/auth";
 import {
   beginPrintJob,
@@ -8,6 +9,7 @@ import {
   finishPrintJob,
   openPos,
   queueReprintJobs,
+  requestVoidApproval,
   verifyManager,
   voidCheckout,
   voidOrder,
@@ -32,6 +34,7 @@ import type {
   PosState,
   Promotion,
   Session,
+  VoidRequest,
 } from "@/lib/types";
 
 type PosClientProps = {
@@ -42,6 +45,7 @@ type PosClientProps = {
   promotions: Promotion[];
   orders: Order[];
   printJobs: PrintJob[];
+  voidRequests: VoidRequest[];
 };
 
 const CASH_PRESETS = [500, 1000, 2000];
@@ -54,6 +58,7 @@ type SavedCheckout = {
   tendered: string;
   paymentMethod: PaymentMethod;
   promoId: string | null;
+  voidRequestId: string | null;
 };
 
 function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
@@ -85,6 +90,8 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
       tendered: typeof saved.tendered === "string" ? saved.tendered : "",
       paymentMethod: parsePayment(saved.paymentMethod),
       promoId: typeof saved.promoId === "string" ? saved.promoId : null,
+      voidRequestId:
+        typeof saved.voidRequestId === "string" ? saved.voidRequestId : null,
     };
   } catch {
     return null;
@@ -103,7 +110,9 @@ export function PosClient({
   promotions,
   orders,
   printJobs,
+  voidRequests,
 }: PosClientProps) {
+  const router = useRouter();
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -116,6 +125,7 @@ export function PosClient({
   const [voidTargetId, setVoidTargetId] = useState<string | null>(null);
   const [voidSearch, setVoidSearch] = useState("");
   const [voidTodayOnly, setVoidTodayOnly] = useState(true);
+  const [activeVoidRequestId, setActiveVoidRequestId] = useState<string | null>(null);
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoId, setPromoId] = useState<string | null>(null);
   const [printOrderId, setPrintOrderId] = useState<string | null>(null);
@@ -190,6 +200,7 @@ export function PosClient({
         setTendered(saved.tendered);
         setPaymentMethod(saved.paymentMethod);
         setPromoId(saved.promoId);
+        setActiveVoidRequestId(saved.voidRequestId);
       }
       setCheckoutReady(true);
     });
@@ -206,8 +217,9 @@ export function PosClient({
       tendered,
       paymentMethod,
       promoId,
+      voidRequestId: activeVoidRequestId,
     });
-  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, promoId]);
+  }, [checkoutReady, session.userId, cart, tendered, paymentMethod, promoId, activeVoidRequestId]);
 
   useEffect(() => {
     if (!promoId || promotions.some((item) => item.id === promoId && item.active)) return;
@@ -254,10 +266,47 @@ export function PosClient({
   }, [orders, voidSearch, voidTodayOnly]);
   const selectedVoidOrder = orders.find((order) => order.id === voidTargetId);
   const cashierPaidVoid = !isManager && cart.length === 0 ? lastOrderId : null;
-  const canCharge = !isManager && pos.isOpen && cart.length > 0 && (!isCash || paid >= total);
+  const activeVoidRequest = voidRequests.find(
+    (request) => request.id === activeVoidRequestId,
+  );
+  const voidRequestPending =
+    Boolean(activeVoidRequestId) && activeVoidRequest?.status !== "approved";
+  const canCharge =
+    !isManager &&
+    !voidRequestPending &&
+    pos.isOpen &&
+    cart.length > 0 &&
+    (!isCash || paid >= total);
+
+  useEffect(() => {
+    if (!activeVoidRequestId || activeVoidRequest?.status === "approved") return;
+    const refreshTimer = window.setInterval(() => router.refresh(), 3000);
+    return () => window.clearInterval(refreshTimer);
+  }, [activeVoidRequest?.status, activeVoidRequestId, router]);
+
+  useEffect(() => {
+    if (!activeVoidRequestId || activeVoidRequest?.status !== "approved") return;
+    if (activeVoidRequest.orderId) {
+      if (lastOrderId === activeVoidRequest.orderId) {
+        setLastOrderId(null);
+        setLastTicket(null);
+        setLastOrder(null);
+      }
+    } else {
+      setCart([]);
+      setTendered("");
+      setPaymentMethod("cash");
+      setPromoId(null);
+      setPromoOpen(false);
+    }
+    setActiveVoidRequestId(null);
+    setVoidTargetId(null);
+    setVoidReason("");
+    setMessage("Admin approved the void. The checkout has been voided.");
+  }, [activeVoidRequest, activeVoidRequestId, lastOrderId]);
 
   function addItem(id: string, name: string, price: number) {
-    if (!pos.isOpen || isManager) {
+    if (!pos.isOpen || isManager || voidRequestPending) {
       return;
     }
     setCart((current) => {
@@ -357,6 +406,37 @@ export function PosClient({
       setVoidTargetId(null);
       setVoidModalOpen(false);
       setMessage("Transaction voided.");
+    });
+  }
+
+  function handleRequestVoid() {
+    if (!voidReason.trim()) {
+      setMessage("Enter a reason for voiding.");
+      return;
+    }
+    const targetId = voidTargetId || (cart.length === 0 ? lastOrderId : null);
+    if (cart.length === 0 && !targetId) {
+      setMessage("No items to void.");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await requestVoidApproval(
+        cart,
+        voidReason,
+        targetId,
+        promoId,
+        paymentMethod,
+      );
+      if ("error" in result && result.error) {
+        setMessage(result.error);
+        return;
+      }
+      setActiveVoidRequestId(result.requestId);
+      setVoidUsername("");
+      setVoidPassword("");
+      setVoidModalOpen(false);
+      setMessage("Void request sent to admin. Waiting for approval.");
     });
   }
 
@@ -696,11 +776,22 @@ export function PosClient({
                 </button>
                 <button
                   type="submit"
+                  disabled={pending || voidRequestPending}
                   className="w-2/3 rounded-xl bg-black py-2.5 text-xs font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99]"
                 >
                   {isManager ? "Void ticket" : "Confirm Void"}
                 </button>
               </div>
+              {!isManager ? (
+                <button
+                  type="button"
+                  disabled={pending || voidRequestPending}
+                  onClick={handleRequestVoid}
+                  className="mt-2 w-full rounded-xl border border-black py-2.5 text-xs font-medium text-black transition hover:bg-neutral-100 disabled:opacity-40"
+                >
+                  {voidRequestPending ? "Waiting for admin approval" : "Request to admin"}
+                </button>
+              ) : null}
             </form>
           </div>
         ) : null}
@@ -964,7 +1055,7 @@ export function PosClient({
                       key={item.id}
                       type="button"
                       onClick={() => addItem(item.id, item.name, item.price)}
-                      disabled={isManager}
+                      disabled={isManager || voidRequestPending}
                       className="rounded-2xl border border-neutral-300 bg-white p-3 text-center transition hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <p className="text-xs font-medium">{item.name}</p>
@@ -1166,7 +1257,7 @@ export function PosClient({
                     setVoidTargetId(cart.length === 0 ? lastOrderId : null);
                     setVoidModalOpen(true);
                   }}
-                  disabled={cart.length === 0 && !lastOrderId}
+                  disabled={voidRequestPending || (cart.length === 0 && !lastOrderId)}
                   className="rounded-lg border border-neutral-300 py-2 text-xs hover:border-black disabled:opacity-40 transition"
                 >
                   Void
@@ -1225,6 +1316,11 @@ export function PosClient({
 
               {message ? (
                 <p className="text-center text-xs text-neutral-500">{message}</p>
+              ) : null}
+              {voidRequestPending ? (
+                <p className="rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-center text-xs font-medium text-neutral-700">
+                  Void request pending admin approval
+                </p>
               ) : null}
             </div>
           </aside>

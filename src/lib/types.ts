@@ -159,6 +159,25 @@ export type OffRequest = {
   createdAt: string;
 };
 
+export type VoidRequest = {
+  id: string;
+  requestedAt: string;
+  requestedById: string;
+  requestedByName: string;
+  reason: string;
+  status: "pending" | "approved";
+  orderId?: string;
+  items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  promoLabel?: string;
+  total: number;
+  paymentMethod: PaymentMethod;
+  approvedAt?: string;
+  approvedByName?: string;
+  processedOrderId?: string;
+};
+
 export type StoreData = {
   pos: PosState;
   orders: Order[];
@@ -174,6 +193,7 @@ export type StoreData = {
   costings: CostingItem[];
   loginActivity: LoginActivity[];
   offRequests: OffRequest[];
+  voidRequests: VoidRequest[];
   loginGates: {
     admin: string;
     cashier: string;
