@@ -759,47 +759,6 @@ export function PosClient({
                 ×
               </button>
               <h2 className="text-xl font-semibold tracking-tight">Baristas</h2>
-              <p className="mt-1 text-sm text-neutral-500">
-                Each barista clocks in with their own username and password. The same person cannot clock in twice.
-              </p>
-
-              {clockedInBaristas.length > 0 ? (
-                <div className="mt-5 space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">On shift</p>
-                  {clockedInBaristas.map((barista) => (
-                    <div
-                      key={barista.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 px-3.5 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{barista.name}</p>
-                        <p className="truncate text-xs text-neutral-400">{barista.username}</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() =>
-                          startTransition(async () => {
-                            const result = await punchBaristaShift({ type: "logout", userId: barista.id });
-                            if (result && "error" in result && result.error) {
-                              setBaristaNotice(result.error);
-                              return;
-                            }
-                            setBaristaNotice(null);
-                            setMessage(`${barista.name} clocked out.`);
-                            router.refresh();
-                          })
-                        }
-                        className="shrink-0 rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:border-black disabled:opacity-40"
-                      >
-                        Out
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 text-sm text-neutral-500">No barista is on shift yet.</p>
-              )}
 
               <form
                 onSubmit={(event) => {
@@ -821,10 +780,10 @@ export function PosClient({
                     router.refresh();
                   });
                 }}
-                className="mt-5 border-t border-neutral-100 pt-5"
+                className="mt-5"
               >
                 <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  {clockedInBaristas.length > 0 ? "Clock in another" : "Clock in"}
+                  Clock in
                 </p>
                 <label className="mt-3 block text-xs font-medium text-neutral-600">
                   <span className="mb-1.5 block">Username</span>
