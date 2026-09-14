@@ -263,7 +263,6 @@ export function SalePurchaseTransactions({
   const [stockUnit, setStockUnit] = useState("grams");
   const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
   const [stockCupUsageAmount, setStockCupUsageAmount] = useState("");
-  const [stockCupsMake, setStockCupsMake] = useState("");
 
   function resetStockForm() {
     setEditStockId(null);
@@ -272,7 +271,6 @@ export function SalePurchaseTransactions({
     setStockUnit("grams");
     setStockPurchaseUnitSize("");
     setStockCupUsageAmount("");
-    setStockCupsMake("");
   }
 
   const [editRestockId, setEditRestockId] = useState<string | null>(null);
@@ -531,8 +529,10 @@ export function SalePurchaseTransactions({
     const unit = stockUnit.trim() || "pcs";
     const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
     const cupUsageAmount = stockCupUsageAmount.trim() ? Number(stockCupUsageAmount) : undefined;
-    const cupsMake = stockCupsMake.trim() ? Number(stockCupsMake) : undefined;
-    if ([purchaseUnitSize, cupUsageAmount, cupsMake].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
+    const cupsMake = purchaseUnitSize !== undefined && cupUsageAmount !== undefined
+      ? purchaseUnitSize / cupUsageAmount
+      : undefined;
+    if ([purchaseUnitSize, cupUsageAmount].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
@@ -604,7 +604,6 @@ export function SalePurchaseTransactions({
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
     setStockCupUsageAmount(s.cupUsageAmount?.toString() ?? "");
-    setStockCupsMake(s.cupsMake?.toString() ?? "");
   };
 
   const handleDeleteStock = async (id: string) => {
@@ -963,16 +962,18 @@ export function SalePurchaseTransactions({
                 <input type="number" placeholder="e.g. 9" value={stockCupUsageAmount} onChange={(e) => setStockCupUsageAmount(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Cups make</label>
-                <input type="number" min="0" step="any" placeholder="e.g. 111.11" value={stockCupsMake} onChange={(e) => setStockCupsMake(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Quantity</label>
                 <input type="number" placeholder="0" value={stockQty} onChange={(e) => setStockQty(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Unit</label>
                 <input type="text" placeholder="grams, ml, pcs" value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Cups make</label>
+                <div className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700">
+                  {Number(stockPurchaseUnitSize) > 0 && Number(stockCupUsageAmount) > 0 ? (Number(stockPurchaseUnitSize) / Number(stockCupUsageAmount)).toFixed(2) : "—"}
+                </div>
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="flex-1 bg-black text-white px-4 py-1.5 rounded text-sm font-medium">{editStockId ? "Update" : "Add"}</button>
