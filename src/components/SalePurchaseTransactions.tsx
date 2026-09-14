@@ -275,19 +275,42 @@ export function SalePurchaseTransactions({
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const recipeMenu = store.menu ?? [];
   const recipeMap = store.recipes ?? {};
-  const [recipeDrink, setRecipeDrink] = useState(recipeMenu[0]?.name ?? "");
-  const [recipeRows, setRecipeRows] = useState<RecipeIngredient[]>([]);
+  type IngredientAssignment = { name: string; inventoryItemId: string; amount: number; unit: string; drinks: string[] };
+  const [ingredientAssignments, setIngredientAssignments] = useState<IngredientAssignment[]>([]);
 
   useEffect(() => {
-    setRecipeRows(recipeMap[recipeDrink] ?? []);
-  }, [recipeDrink]);
+    const grouped = new Map<string, IngredientAssignment>();
+    Object.entries(recipeMap).forEach(([drink, ingredients]) => {
+      ingredients.forEach((ingredient) => {
+        const key = ingredient.inventoryItemId || ingredient.name.trim().toLowerCase();
+        const existing = grouped.get(key);
+        if (existing) existing.drinks.push(drink);
+        else grouped.set(key, { ...ingredient, drinks: [drink] });
+      });
+    });
+    setIngredientAssignments(Array.from(grouped.values()));
+  }, [recipeMap]);
 
-  function updateRecipeRow(index: number, patch: Partial<RecipeIngredient>) {
-    setRecipeRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  function updateIngredientAssignment(index: number, patch: Partial<IngredientAssignment>) {
+    setIngredientAssignments((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   }
 
-  async function saveRecipe() {
-    const recipes = { ...recipeMap, [recipeDrink]: recipeRows.filter((row) => row.name.trim() && row.amount > 0) };
+  function toggleAssignment(index: number, drink: string) {
+    setIngredientAssignments((rows) => rows.map((row, rowIndex) => {
+      if (rowIndex !== index) return row;
+      const drinks = row.drinks.includes(drink) ? row.drinks.filter((name) => name !== drink) : [...row.drinks, drink];
+      return { ...row, drinks };
+    }));
+  }
+
+  async function saveIngredientAssignments() {
+    const recipes: StoreData["recipes"] = {};
+    ingredientAssignments.forEach((ingredient) => {
+      ingredient.drinks.forEach((drink) => {
+        recipes[drink] ??= [];
+        recipes[drink].push({ inventoryItemId: ingredient.inventoryItemId, name: ingredient.name.trim(), amount: ingredient.amount, unit: ingredient.unit.trim() });
+      });
+    });
     await saveAdminData({ recipes });
   }
 
@@ -733,38 +756,29 @@ export function SalePurchaseTransactions({
 
       {activeTab === "recipes" && (
         <div className="space-y-6">
-          <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h3 className="text-xs font-bold text-neutral-700 uppercase">Ingredients per Drink</h3>
-                <label className="block text-xs font-medium text-neutral-600 mt-3 mb-1">Drink</label>
-                <select value={recipeDrink} onChange={(event) => setRecipeDrink(event.target.value)} className="min-w-64 bg-white border border-neutral-400 rounded px-3 py-2 text-sm">
-                  {recipeMenu.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-                </select>
-              </div>
-              <button type="button" onClick={() => setRecipeRows((rows) => [...rows, { inventoryItemId: "", name: "", amount: 0, unit: "ml" }])} className="bg-black text-white px-4 py-2 rounded text-sm font-medium">Add Ingredient</button>
-            </div>
+          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4">
+            <div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients</h3><p className="mt-1 text-xs text-neutral-500">Create an ingredient once, then assign it to multiple drinks.</p></div>
+            <button type="button" onClick={() => setIngredientAssignments((rows) => [...rows, { inventoryItemId: "", name: "", amount: 0, unit: "ml", drinks: [] }])} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Ingredient</button>
           </div>
           <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead><tr className="bg-black text-white text-xs font-semibold"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead>
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3">Add drinks</th><th className="p-3 text-center">Actions</th></tr></thead>
               <tbody>
-                {recipeRows.map((row, index) => (
-                  <tr key={`${recipeDrink}-${index}`} className="border-b border-neutral-200">
-                    <td className="p-2 space-y-2">
-                      <select value={row.inventoryItemId === "other" || (!store.inventory.some((item) => item.id === row.inventoryItemId) && row.name) ? "other" : row.inventoryItemId} onChange={(event) => { const value = event.target.value; const item = store.inventory.find((stock) => stock.id === value); updateRecipeRow(index, value === "other" ? { inventoryItemId: "other", name: "", unit: "ml" } : { inventoryItemId: value, name: item?.name ?? "", unit: item?.unit ?? row.unit }); }} className="w-full border border-neutral-300 rounded px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>
-                      {(row.inventoryItemId === "other" || (!store.inventory.some((item) => item.id === row.inventoryItemId) && row.name)) && <input value={row.name} onChange={(event) => updateRecipeRow(index, { name: event.target.value })} placeholder="Type ingredient name" className="w-full border border-neutral-300 rounded px-2 py-1.5" />}
-                    </td>
-                    <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount === 0 ? "" : row.amount} onChange={(event) => updateRecipeRow(index, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full border border-neutral-300 rounded px-2 py-1.5" /></td>
-                    <td className="p-2"><input value={row.unit} onChange={(event) => updateRecipeRow(index, { unit: event.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5" /></td>
-                    <td className="p-2 text-center"><button type="button" onClick={() => setRecipeRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-red-600 text-xs font-medium">Remove</button></td>
-                  </tr>
-                ))}
-                {recipeRows.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-neutral-500">No ingredients added for this drink.</td></tr>}
+                {ingredientAssignments.map((row, index) => {
+                  const assignedElsewhere = new Set(ingredientAssignments.flatMap((other, otherIndex) => otherIndex === index ? [] : other.drinks));
+                  return <tr key={index} className="border-b border-neutral-200 align-top">
+                    <td className="p-2 space-y-2"><select value={row.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateIngredientAssignment(index, { inventoryItemId: event.target.value, name: item?.name ?? row.name, unit: item?.unit ?? row.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{row.inventoryItemId === "other" && <input value={row.name} onChange={(event) => updateIngredientAssignment(index, { name: event.target.value })} placeholder="Type ingredient name" className="w-full rounded border border-neutral-300 px-2 py-1.5" />}</td>
+                    <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount === 0 ? "" : row.amount} onChange={(event) => updateIngredientAssignment(index, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
+                    <td className="p-2"><input value={row.unit} onChange={(event) => updateIngredientAssignment(index, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
+                    <td className="p-2"><div className="grid max-h-32 min-w-72 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 p-2">{recipeMenu.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={row.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name)} onChange={() => toggleAssignment(index, drink.name)} />{drink.name}</label>)}</div></td>
+                    <td className="p-2 text-center"><button type="button" onClick={() => setIngredientAssignments((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-xs font-medium text-red-600">Remove</button></td>
+                  </tr>;
+                })}
+                {ingredientAssignments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-neutral-500">No ingredients added.</td></tr>}
               </tbody>
             </table>
           </div>
-          <div className="flex justify-end"><button type="button" onClick={() => void saveRecipe()} disabled={!recipeDrink} className="bg-black text-white px-5 py-2 rounded text-sm font-medium disabled:opacity-50">Save Recipe</button></div>
+          <div className="flex justify-end"><button type="button" onClick={() => void saveIngredientAssignments()} className="rounded bg-black px-5 py-2 text-sm font-medium text-white">Save Ingredients</button></div>
         </div>
       )}
 
