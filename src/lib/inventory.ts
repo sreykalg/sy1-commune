@@ -259,11 +259,15 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   const normalizeDrink = (value: string) => value
     .trim()
     .toLowerCase()
-    .replace(/[·–—-]\s*(hot|iced)\s*$/i, "")
+    .normalize("NFKC")
+    .replace(/[·–—-]?\s*(hot|iced)\s*$/i, "")
     .replace(/\s*\((hot|iced)\)\s*$/i, "")
     .replace(/\s+/g, " ");
   const normalizedNames = new Set(names.map(normalizeDrink));
-  const matchesDrink = (drink: string) => drink === line.productId || normalizedNames.has(normalizeDrink(drink));
+  const matchesDrink = (drink: string) => {
+    const normalizedDrink = normalizeDrink(drink);
+    return drink === line.productId || normalizedNames.has(normalizedDrink);
+  };
   const costing = (store.recipeCostings ?? []).find((entry) => entry.drinks.some(matchesDrink));
   const costingRecipe = costing?.ingredients;
   const savedRecipe = (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
