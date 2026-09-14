@@ -1072,7 +1072,7 @@ export function SalePurchaseTransactions({
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
-                      <td className="p-2 border-r border-neutral-200 text-right">{toPieceQuantity(s, s.openingStock ?? opening).toFixed(2)} pcs</td>
+                      <td className="p-2 border-r border-neutral-200 text-right">{toPieceQuantity(s, opening).toFixed(2)} pcs</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-semibold text-black">
                         {restocked > 0 ? `+${toPieceQuantity(s, restocked).toFixed(2)}` : "0.00"} pcs
                       </td>
