@@ -268,12 +268,15 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
     const normalizedDrink = normalizeDrink(drink);
     return drink === line.productId || normalizedNames.has(normalizedDrink);
   };
-  const costing = (store.recipeCostings ?? []).find((entry) => entry.drinks.some(matchesDrink));
-  const costingRecipe = costing?.ingredients;
-  const savedRecipe = (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
+  const recipeCostings = store.recipeCostings ?? [];
+  const costing = recipeCostings.find((entry) => entry.drinks.some(matchesDrink));
 
-  // Costing assignment is the source of truth. Only the costing explicitly assigned to this item is used.
-  const recipe = costingRecipe ?? savedRecipe ?? [];
+  // When costings exist, they are the only source of truth. Never fall back to a stale recipe,
+  // because that can deduct the wrong cup and omit ingredients such as milk.
+  const recipe = recipeCostings.length > 0
+    ? costing?.ingredients ?? []
+    : (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1] ?? [];
+
   return recipe.filter((ingredient) => Number(ingredient.amount) > 0);
 
 }
