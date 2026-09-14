@@ -943,22 +943,21 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           </p>
         ) : (
           <div className="mt-4">
-            <div className="hidden grid-cols-9 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
+            <div className="hidden grid-cols-8 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
               <p className="min-w-0">Order ID</p>
               <p className="min-w-0">Time</p>
               <p className="min-w-0">Cashier</p>
               <p className="min-w-0">Items</p>
               <p className="min-w-0">Status</p>
               <p className="min-w-0">Reason</p>
-              <p className="min-w-0">Promo</p>
-              <p className="min-w-0">Pay</p>
+              <p className="min-w-0">Payment</p>
               <p className="min-w-0 text-right">Total</p>
             </div>
             <div className="divide-y divide-neutral-200">
               {latest.map((order: Order, ordIdx: number) => (
                 <div
                   key={`${order.id}-${ordIdx}`}
-                  className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-9 lg:items-start lg:gap-x-4"
+                  className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-8 lg:items-start lg:gap-x-4"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{orderIdLabel(order)}</p>
@@ -1008,12 +1007,8 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                     <span className="lg:hidden">Reason: </span>
                     {isVoided(order) ? order.voidReason?.trim() || "—" : "—"}
                   </p>
-                  <p className="min-w-0 break-words text-xs text-neutral-500 lg:text-sm">
-                    <span className="lg:hidden">Promo: </span>
-                    {order.promoLabel ?? "—"}
-                  </p>
                   <p className="min-w-0 text-xs text-neutral-500 lg:text-sm">
-                    <span className="lg:hidden">Pay: </span>
+                    <span className="lg:hidden">Payment: </span>
                     {paymentLabel(order.paymentMethod)}
                   </p>
                   <p className="min-w-0 text-sm font-semibold lg:text-right">
