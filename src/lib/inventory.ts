@@ -256,9 +256,11 @@ function cupForDrink(
 export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
   const menuItem = store.menu.find((item) => item.id === line.productId);
   const name = menuItem?.name || line.name;
-  const savedRecipe = Object.entries(store.recipes ?? {}).find(
-    ([recipeName]) => recipeName.trim().toLowerCase() === name.trim().toLowerCase(),
-  )?.[1];
+  const normalizedName = name.trim().toLowerCase().replace(/\s+[·-]\s+(hot|iced)$/i, "");
+  const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => {
+    const normalizedKey = recipeKey.trim().toLowerCase();
+    return recipeKey === line.productId || normalizedKey === name.trim().toLowerCase() || normalizedKey.replace(/\s+[·-]\s+(hot|iced)$/i, "") === normalizedName;
+  })?.[1];
 
   // Inventory is deducted only from ingredients explicitly configured for the drink.
   if (savedRecipe) return savedRecipe.filter((ingredient) => Number(ingredient.amount) > 0);

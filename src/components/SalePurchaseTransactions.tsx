@@ -321,7 +321,10 @@ export function SalePurchaseTransactions({
   async function saveCostings() {
     const recipes: StoreData["recipes"] = {};
     recipeCostings.forEach((costing) => costing.drinks.forEach((drink) => {
-      recipes[drink] = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
+      const ingredients = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
+      recipes[drink] = ingredients;
+      const menuItem = recipeMenu.find((item) => item.name.trim().toLowerCase() === drink.trim().toLowerCase());
+      if (menuItem) recipes[menuItem.id] = ingredients;
     }));
     const savedCostings = recipeCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` }));
     setRecipeCostings(savedCostings);
