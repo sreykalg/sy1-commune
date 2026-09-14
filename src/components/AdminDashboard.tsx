@@ -944,9 +944,9 @@ export function AdminDashboard({ store }: { store: StoreData }) {
         ) : (
           <div className="mt-4">
             <div className="hidden grid-cols-8 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
-              <p className="min-w-0">Order ID</p>
               <p className="min-w-0">Time</p>
               <p className="min-w-0">Cashier</p>
+              <p className="min-w-0">Order ID</p>
               <p className="min-w-0">Items</p>
               <p className="min-w-0">Status</p>
               <p className="min-w-0">Reason</p>
@@ -960,8 +960,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                   className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-8 lg:items-start lg:gap-x-4"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{orderIdLabel(order)}</p>
-                    <p className="mt-0.5 text-xs text-neutral-500 lg:hidden">
+                    <p className="text-sm leading-5 text-neutral-700">
                       {new Date(order.createdAt).toLocaleString("en-US", {
                         timeZone: "Asia/Manila",
                         month: "short",
@@ -970,22 +969,17 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                         minute: "2-digit",
                         hour12: true,
                       })}
-                      <span className="mx-1">·</span>
-                      {order.baristaName}
                     </p>
+                    <p className="mt-0.5 text-xs text-neutral-500 lg:hidden">{order.baristaName}</p>
+                    {!isVoided(order) ? (
+                      <p className="mt-0.5 text-sm font-medium lg:hidden">{orderIdLabel(order)}</p>
+                    ) : null}
                   </div>
-                  <p className="hidden min-w-0 text-sm leading-5 text-neutral-700 lg:block">
-                    {new Date(order.createdAt).toLocaleString("en-US", {
-                      timeZone: "Asia/Manila",
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
-                  </p>
                   <p className="hidden min-w-0 break-words text-sm text-neutral-700 lg:block">
                     {order.baristaName}
+                  </p>
+                  <p className="hidden min-w-0 text-sm font-medium lg:block">
+                    {isVoided(order) ? "" : orderIdLabel(order)}
                   </p>
                   <p className="min-w-0 text-xs leading-relaxed break-words text-neutral-600 lg:text-sm">
                     {order.items
