@@ -656,6 +656,29 @@ export function SalePurchaseTransactions({
     }
   };
 
+  const persistRestockChanges = async (nextStocks: StockItem[], nextRestocks: RestockRecord[]) => {
+    const existingById = new Map(store.inventory.map((item) => [item.id, item]));
+    const inventory = nextStocks.map((item) => {
+      const existing = existingById.get(item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        category: item.category || existing?.category || "",
+        stock: item.stock,
+        openingStock: item.openingStock ?? existing?.openingStock,
+        unit: item.unit || existing?.unit || "pcs",
+        cost: existing?.cost ?? 0,
+        maxStock: existing?.maxStock ?? item.stock,
+        purchaseUnitSize: item.purchaseUnitSize,
+        cupUsageAmount: item.cupUsageAmount,
+        cupsMake: item.cupsMake ?? existing?.cupsMake,
+      };
+    });
+    setStocks(nextStocks);
+    setRestocks(nextRestocks);
+    await saveAdminData({ inventory, restocks: nextRestocks });
+  };
+
   const handleInlineRestock = async (item: StockItem) => {
     const amountStr = inlineRestockValues[item.id];
     if (!amountStr) return;
@@ -665,8 +688,6 @@ export function SalePurchaseTransactions({
     const nowTime = getNowDateTime();
 
     const nextStocks = stocks.map((s) => s.id === item.id ? { ...s, stock: s.stock + addQty } : s);
-    setStocks(nextStocks);
-    await persistInventory(nextStocks);
     const newRestock: RestockRecord = {
       id: Date.now().toString() + Math.random(),
       itemName: item.name,
@@ -674,8 +695,7 @@ export function SalePurchaseTransactions({
       date: nowTime,
     };
     const nextRestocks = [newRestock, ...restocks];
-    setRestocks(nextRestocks);
-    await saveAdminData({ restocks: nextRestocks });
+    await persistRestockChanges(nextStocks, nextRestocks);
 
     setInlineRestockValues({ ...inlineRestockValues, [item.id]: "" });
   };
@@ -714,10 +734,7 @@ export function SalePurchaseTransactions({
           return { ...item, stock };
         });
       }
-      setRestocks(nextRestocks);
-      setStocks(nextStocks);
-      await saveAdminData({ restocks: nextRestocks });
-      await persistInventory(nextStocks);
+      await persistRestockChanges(nextStocks, nextRestocks);
       setEditRestockId(null);
     } else {
       const newRestock: RestockRecord = { id: Date.now().toString(), itemName: restockItem, quantityAdded: qty, date: stamp };
@@ -725,10 +742,7 @@ export function SalePurchaseTransactions({
       const nextStocks = stocks.map((s) =>
         namesMatch(s.name, restockItem) ? { ...s, stock: s.stock + qty } : s,
       );
-      setRestocks(nextRestocks);
-      setStocks(nextStocks);
-      await saveAdminData({ restocks: nextRestocks });
-      await persistInventory(nextStocks);
+      await persistRestockChanges(nextStocks, nextRestocks);
     }
     setRestockItem(""); setRestockQty(""); setRestockDate(getTodayDate());
   };
