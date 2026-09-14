@@ -262,6 +262,7 @@ export function SalePurchaseTransactions({
   const [stockQty, setStockQty] = useState("");
   const [stockUnit, setStockUnit] = useState("grams");
   const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
+  const [stockCupUsageAmount, setStockCupUsageAmount] = useState("");
 
   function resetStockForm() {
     setEditStockId(null);
@@ -270,6 +271,7 @@ export function SalePurchaseTransactions({
     setStockQty("");
     setStockUnit("grams");
     setStockPurchaseUnitSize("");
+    setStockCupUsageAmount("");
   }
 
   const [editRestockId, setEditRestockId] = useState<string | null>(null);
@@ -527,11 +529,12 @@ export function SalePurchaseTransactions({
     if (!Number.isFinite(qty) || qty < 0) return;
     const unit = stockUnit.trim() || "pcs";
     const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
-    if (purchaseUnitSize !== undefined && (!Number.isFinite(purchaseUnitSize) || purchaseUnitSize <= 0)) return;
+    const cupUsageAmount = stockCupUsageAmount.trim() ? Number(stockCupUsageAmount) : undefined;
+    if ([purchaseUnitSize, cupUsageAmount].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName, category: stockCategory, stock: qty, unit, purchaseUnitSize } : s,
+        s.id === editStockId ? { ...s, name: stockName, category: stockCategory, stock: qty, unit, purchaseUnitSize, cupUsageAmount } : s,
       );
       setStocks(nextStocks);
       await persistInventory(nextStocks);
@@ -544,6 +547,7 @@ export function SalePurchaseTransactions({
         stock: qty,
         unit,
         purchaseUnitSize,
+        cupUsageAmount,
       };
       const nextStocks = [...stocks, newItem];
       const newRestock: RestockRecord = {
@@ -597,6 +601,7 @@ export function SalePurchaseTransactions({
     setStockQty(s.stock.toString());
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
+    setStockCupUsageAmount(s.cupUsageAmount?.toString() ?? "");
   };
 
   const handleDeleteStock = async (id: string) => {
@@ -941,7 +946,7 @@ export function SalePurchaseTransactions({
           {stockNotice ? <p className="text-sm text-red-600">{stockNotice}</p> : null}
           <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
             <h3 className="text-xs font-bold text-neutral-700 uppercase">{editStockId ? "Edit Stock Item" : "Add Stock Item"}</h3>
-            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
+            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-4 items-end">
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Item Name</label>
                 <input type="text" placeholder="e.g. Coffee Beans" value={stockName} onChange={(e) => setStockName(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
@@ -949,6 +954,14 @@ export function SalePurchaseTransactions({
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Category</label>
                 <input type="text" placeholder="e.g. Ingredients" value={stockCategory} onChange={(e) => setStockCategory(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Total Unit Item</label>
+                <input type="number" placeholder="e.g. 1000" value={stockPurchaseUnitSize} onChange={(e) => setStockPurchaseUnitSize(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Unit Item</label>
+                <input type="number" placeholder="e.g. 9" value={stockCupUsageAmount} onChange={(e) => setStockCupUsageAmount(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Quantity</label>
