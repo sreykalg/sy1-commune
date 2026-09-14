@@ -260,14 +260,11 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   const normalizedNames = new Set(names.map(normalizeDrink));
   const matchesDrink = (drink: string) => drink === line.productId || normalizedNames.has(normalizeDrink(drink));
   const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
-  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some((drink) => matchesDrink(drink) || normalizeDrink(drink).includes(normalizeDrink(names[0])) || normalizeDrink(names[0]).includes(normalizeDrink(drink))))?.ingredients;
+  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some(matchesDrink))?.ingredients;
 
-  // Inventory is deducted only from ingredients explicitly configured for the drink.
-  // Costings are the source of truth. Prefer the current costing over legacy recipe entries.
+  // Costing assignment is the source of truth. Only the costing explicitly assigned to this item is used.
   const recipe = costingRecipe ?? savedRecipe ?? [];
   return recipe.filter((ingredient) => Number(ingredient.amount) > 0);
-
-  return [];
 
 }
 
