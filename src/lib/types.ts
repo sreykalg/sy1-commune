@@ -104,6 +104,7 @@ export type InventoryItem = {
   stock: number;
   maxStock: number;
   purchaseUnitSize?: number;
+  cupUsageAmount?: number;
 };
 
 export type RecipeIngredient = {

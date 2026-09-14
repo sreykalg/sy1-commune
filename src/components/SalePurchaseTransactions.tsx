@@ -150,6 +150,7 @@ type StockItem = {
   stock: number;
   unit: string;
   purchaseUnitSize?: number;
+  cupUsageAmount?: number;
 };
 
 type RestockRecord = {
@@ -198,6 +199,7 @@ export function SalePurchaseTransactions({
     stock: item.stock,
     unit: item.unit || "pcs",
     purchaseUnitSize: item.purchaseUnitSize,
+    cupUsageAmount: item.cupUsageAmount,
   }));
   const orderUsageRows = store.orders
     .filter((order) => !order.voided)
@@ -556,10 +558,10 @@ export function SalePurchaseTransactions({
     resetStockForm();
   };
 
-  const updatePurchaseUnitSize = async (id: string, value: string) => {
-    const purchaseUnitSize = value === "" ? undefined : Number(value);
-    if (purchaseUnitSize !== undefined && (!Number.isFinite(purchaseUnitSize) || purchaseUnitSize <= 0)) return;
-    const nextStocks = stocks.map((item) => item.id === id ? { ...item, purchaseUnitSize } : item);
+  const updateUnitSetup = async (id: string, field: "purchaseUnitSize" | "cupUsageAmount", value: string) => {
+    const parsed = value === "" ? undefined : Number(value);
+    if (parsed !== undefined && (!Number.isFinite(parsed) || parsed <= 0)) return;
+    const nextStocks = stocks.map((item) => item.id === id ? { ...item, [field]: parsed } : item);
     setStocks(nextStocks);
     await persistInventory(nextStocks);
   };
@@ -820,7 +822,7 @@ export function SalePurchaseTransactions({
           <div className="overflow-x-auto rounded-lg border border-neutral-300">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Item</th><th className="p-3">Total Unit Item</th><th className="p-3">Unit Item</th><th className="p-3">Cups make</th></tr></thead>
-              <tbody>{stocks.map((item) => <tr key={item.id} className="border-b border-neutral-200 last:border-0"><td className="p-3 font-medium">{item.name}</td><td className="p-3"><input type="number" min="0" step="any" value={item.purchaseUnitSize ?? ""} onChange={(event) => { const value = event.target.value; setStocks((current) => current.map((row) => row.id === item.id ? { ...row, purchaseUnitSize: value === "" ? undefined : Number(value) } : row)); }} onBlur={(event) => void updatePurchaseUnitSize(item.id, event.target.value)} placeholder="e.g. 1000" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3 text-neutral-600">{item.unit}</td><td className="p-3"><input type="number" min="0" step="any" value={(() => { const costingIngredient = (store.recipeCostings ?? []).flatMap((costing) => costing.ingredients).find((ingredient) => namesMatch(ingredient.name, item.name)); const amount = Number(costingIngredient?.amount) || 0; return item.purchaseUnitSize && amount > 0 ? (item.purchaseUnitSize / amount).toFixed(2) : ""; })()} readOnly placeholder="Set costing amount" className="w-full rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-neutral-600" /></td></tr>)}</tbody>
+              <tbody>{stocks.map((item) => <tr key={item.id} className="border-b border-neutral-200 last:border-0"><td className="p-3 font-medium">{item.name}</td><td className="p-3"><input type="number" min="0" step="any" value={item.purchaseUnitSize ?? ""} onChange={(event) => { const value = event.target.value; setStocks((current) => current.map((row) => row.id === item.id ? { ...row, purchaseUnitSize: value === "" ? undefined : Number(value) } : row)); }} onBlur={(event) => void updateUnitSetup(item.id, "purchaseUnitSize", event.target.value)} placeholder="e.g. 1000" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3"><input type="number" min="0" step="any" value={item.cupUsageAmount ?? ""} onChange={(event) => { const value = event.target.value; setStocks((current) => current.map((row) => row.id === item.id ? { ...row, cupUsageAmount: value === "" ? undefined : Number(value) } : row)); }} onBlur={(event) => void updateUnitSetup(item.id, "cupUsageAmount", event.target.value)} placeholder="e.g. 9" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3 text-neutral-600">{item.purchaseUnitSize && item.cupUsageAmount ? (item.purchaseUnitSize / item.cupUsageAmount).toFixed(2) : "—"}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
