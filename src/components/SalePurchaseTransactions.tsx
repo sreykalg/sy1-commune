@@ -551,8 +551,11 @@ export function SalePurchaseTransactions({
       const nextStocks = stocks.map((s) =>
         s.id === editStockId ? { ...s, name: stockName.trim(), stock: toBaseQuantity({ purchaseUnitSize }, pieces), unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
       );
+      const nextRestocks = restocks.filter((record) => !namesMatch(record.itemName, stockName));
       setStocks(nextStocks);
+      setRestocks(nextRestocks);
       await persistInventory(nextStocks);
+      await saveAdminData({ restocks: nextRestocks });
       setEditStockId(null);
     } else {
       const newItem: StockItem = {
@@ -566,17 +569,8 @@ export function SalePurchaseTransactions({
         cupsMake,
       };
       const nextStocks = [...stocks, newItem];
-      const newRestock: RestockRecord = {
-        id: Date.now().toString() + Math.random(),
-        itemName: stockName,
-        quantityAdded: toBaseQuantity({ purchaseUnitSize }, pieces),
-        date: getNowDateTime(),
-      };
-      const nextRestocks = [newRestock, ...restocks];
       setStocks(nextStocks);
-      setRestocks(nextRestocks);
       await persistInventory(nextStocks);
-      await saveAdminData({ restocks: nextRestocks });
     }
     resetStockForm();
   };
