@@ -136,6 +136,7 @@ export async function saveAdminData(data: {
   inventory?: StoreData["inventory"];
   restocks?: StoreData["restocks"];
   costings?: StoreData["costings"];
+  recipes?: StoreData["recipes"];
   usageLogs?: StoreData["usageLogs"];
   orders?: StoreData["orders"];
 }) {
@@ -144,6 +145,7 @@ export async function saveAdminData(data: {
     if (data.inventory) store.inventory = data.inventory;
     if (data.restocks) store.restocks = data.restocks;
     if (data.costings) store.costings = data.costings;
+    if (data.recipes) store.recipes = data.recipes;
     if (data.usageLogs) store.usageLogs = data.usageLogs;
     if (data.orders) store.orders = data.orders;
   });

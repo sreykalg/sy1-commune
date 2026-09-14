@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
 import { costingIngredientForItem, cupsFromQuantity, formatQty, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
-import type { Order, StoreData } from "@/lib/types";
+import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
 
 function inventoryUsagePerPiece(itemName: string, used: number) {
   const normalized = itemName.trim().toLowerCase();
@@ -15,12 +15,12 @@ function inventoryUsagePerPiece(itemName: string, used: number) {
   return unitSize === null ? "—" : `${(used / unitSize).toFixed(2)} pc`;
 }
 
-export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used";
+export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used" | "recipes";
 
 type InventoryStore = Pick<
   StoreData,
   "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
->;
+> & Partial<Pick<StoreData, "recipes" | "menu">>;
 
 type SalePurchaseTransactionsProps = {
   store: InventoryStore;
@@ -183,7 +183,7 @@ type UsageRecord = {
 
 export function SalePurchaseTransactions({
   store,
-  tabs = ["transactions", "stock", "restock", "costing", "used"],
+  tabs = ["transactions", "stock", "restock", "costing", "used", "recipes"],
   activeTab: controlledActiveTab,
   onTabChange,
   showTabs = true,
@@ -273,6 +273,23 @@ export function SalePurchaseTransactions({
 
   const [inlineRestockValues, setInlineRestockValues] = useState<{ [key: string]: string }>({});
   const [stockNotice, setStockNotice] = useState<string | null>(null);
+  const recipeMenu = store.menu ?? [];
+  const recipeMap = store.recipes ?? {};
+  const [recipeDrink, setRecipeDrink] = useState(recipeMenu[0]?.name ?? "");
+  const [recipeRows, setRecipeRows] = useState<RecipeIngredient[]>([]);
+
+  useEffect(() => {
+    setRecipeRows(recipeMap[recipeDrink] ?? []);
+  }, [recipeDrink, store.recipes]);
+
+  function updateRecipeRow(index: number, patch: Partial<RecipeIngredient>) {
+    setRecipeRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  }
+
+  async function saveRecipe() {
+    const recipes = { ...recipeMap, [recipeDrink]: recipeRows.filter((row) => row.name.trim() && row.amount > 0) };
+    await saveAdminData({ recipes });
+  }
 
   const [filterType, setFilterType] = useState("All");
   const [filterKeyword, setFilterKeyword] = useState("");
@@ -707,12 +724,46 @@ export function SalePurchaseTransactions({
             onClick={() => setActiveTab(tab)}
             className={`shrink-0 px-4 py-1.5 rounded text-xs font-bold transition shadow-sm uppercase ${activeTab === tab ? "bg-black text-white" : "bg-white text-neutral-700 hover:bg-neutral-100"}`}
           >
-            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : "Usage Logbook"}
+            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : tab === "used" ? "Usage Logbook" : "Ingredients per Drink"}
           </button>
         ))}
       </div> : null}
 
       {dateRangeFilter}
+
+      {activeTab === "recipes" && (
+        <div className="space-y-6">
+          <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-bold text-neutral-700 uppercase">Ingredients per Drink</h3>
+                <label className="block text-xs font-medium text-neutral-600 mt-3 mb-1">Drink</label>
+                <select value={recipeDrink} onChange={(event) => setRecipeDrink(event.target.value)} className="min-w-64 bg-white border border-neutral-400 rounded px-3 py-2 text-sm">
+                  {recipeMenu.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+                </select>
+              </div>
+              <button type="button" onClick={() => setRecipeRows((rows) => [...rows, { inventoryItemId: "", name: "", amount: 0, unit: "ml" }])} className="bg-black text-white px-4 py-2 rounded text-sm font-medium">Add Ingredient</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead><tr className="bg-black text-white text-xs font-semibold"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead>
+              <tbody>
+                {recipeRows.map((row, index) => (
+                  <tr key={`${recipeDrink}-${index}`} className="border-b border-neutral-200">
+                    <td className="p-2"><select value={row.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateRecipeRow(index, { inventoryItemId: event.target.value, name: item?.name ?? row.name, unit: item?.unit ?? row.unit }); }} className="w-full border border-neutral-300 rounded px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></td>
+                    <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount} onChange={(event) => updateRecipeRow(index, { amount: Number(event.target.value) })} className="w-full border border-neutral-300 rounded px-2 py-1.5" /></td>
+                    <td className="p-2"><input value={row.unit} onChange={(event) => updateRecipeRow(index, { unit: event.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5" /></td>
+                    <td className="p-2 text-center"><button type="button" onClick={() => setRecipeRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-red-600 text-xs font-medium">Remove</button></td>
+                  </tr>
+                ))}
+                {recipeRows.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-neutral-500">No ingredients added for this drink.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end"><button type="button" onClick={() => void saveRecipe()} disabled={!recipeDrink} className="bg-black text-white px-5 py-2 rounded text-sm font-medium disabled:opacity-50">Save Recipe</button></div>
+        </div>
+      )}
 
       {activeTab === "transactions" && (
         <div className="space-y-6">
