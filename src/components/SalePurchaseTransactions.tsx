@@ -273,7 +273,7 @@ export function SalePurchaseTransactions({
   const [editStockId, setEditStockId] = useState<string | null>(null);
   const [stockName, setStockName] = useState("");
   const [stockQty, setStockQty] = useState("");
-  const [stockUnit, setStockUnit] = useState("grams");
+  const [stockUnit, setStockUnit] = useState("");
   const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
   const [stockCupUsageAmount, setStockCupUsageAmount] = useState("");
 
@@ -281,7 +281,7 @@ export function SalePurchaseTransactions({
     setEditStockId(null);
     setStockName("");
       setStockQty("");
-    setStockUnit("grams");
+    setStockUnit("");
     setStockPurchaseUnitSize("");
     setStockCupUsageAmount("");
   }
