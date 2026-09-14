@@ -304,8 +304,9 @@ export async function createOrder(
       const ingredients = ingredientsForOrderLine(store, line);
       for (const ingredient of ingredients) {
         const amount = roundQty(ingredient.amount * line.qty);
+        const normalize = (value: string) => value.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
         const inventory = store.inventory.find((item) =>
-          item.id === ingredient.inventoryItemId || item.name.toLowerCase() === ingredient.name.toLowerCase(),
+          item.id === ingredient.inventoryItemId || normalize(item.name) === normalize(ingredient.name),
         );
         if (!inventory) continue;
         inventory.stock = roundQty(Math.max(0, inventory.stock - amount));

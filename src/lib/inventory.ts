@@ -257,13 +257,16 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   const menuItem = store.menu.find((item) => item.id === line.productId);
   const name = menuItem?.name || line.name;
   const normalizedName = name.trim().toLowerCase().replace(/\s+[·-]\s+(hot|iced)$/i, "");
-  const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => {
-    const normalizedKey = recipeKey.trim().toLowerCase();
-    return recipeKey === line.productId || normalizedKey === name.trim().toLowerCase() || normalizedKey.replace(/\s+[·-]\s+(hot|iced)$/i, "") === normalizedName;
-  })?.[1];
+  const matchesDrink = (drink: string) => {
+    const normalizedDrink = drink.trim().toLowerCase();
+    return normalizedDrink === name.trim().toLowerCase() || normalizedDrink.replace(/\s+[·-]\s+(hot|iced)$/i, "") === normalizedName || drink === line.productId;
+  };
+  const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
+  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some(matchesDrink))?.ingredients;
 
   // Inventory is deducted only from ingredients explicitly configured for the drink.
-  if (savedRecipe) return savedRecipe.filter((ingredient) => Number(ingredient.amount) > 0);
+  const recipe = savedRecipe ?? costingRecipe ?? [];
+  return recipe.filter((ingredient) => Number(ingredient.amount) > 0);
 
   return [];
 
