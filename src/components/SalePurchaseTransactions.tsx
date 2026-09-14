@@ -9,6 +9,19 @@ function inventoryUsagePerPiece(item: StockItem, used: number) {
   return unitSize > 0 ? `${(used / unitSize).toFixed(2)} pc` : "—";
 }
 
+function pieceSize(item: Pick<StockItem, "purchaseUnitSize">) {
+  const size = Number(item.purchaseUnitSize);
+  return size > 0 ? size : 1;
+}
+
+function toPieceQuantity(item: Pick<StockItem, "purchaseUnitSize">, amount: number) {
+  return amount / pieceSize(item);
+}
+
+function toBaseQuantity(item: Pick<StockItem, "purchaseUnitSize">, pieces: number) {
+  return pieces * pieceSize(item);
+}
+
 export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used" | "units" | "recipes";
 
 type InventoryStore = Pick<
@@ -524,8 +537,8 @@ export function SalePurchaseTransactions({
   const handleSaveStock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stockName.trim() || !stockQty) return;
-    const qty = Number(stockQty);
-    if (!Number.isFinite(qty) || qty < 0) return;
+    const pieces = Number(stockQty);
+    if (!Number.isFinite(pieces) || pieces < 0) return;
     const unit = stockUnit.trim() || "pcs";
     const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
     const cupUsageAmount = stockCupUsageAmount.trim() ? Number(stockCupUsageAmount) : undefined;
@@ -536,7 +549,7 @@ export function SalePurchaseTransactions({
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName.trim(), stock: qty, unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
+        s.id === editStockId ? { ...s, name: stockName.trim(), stock: toBaseQuantity({ purchaseUnitSize }, pieces), unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
       );
       setStocks(nextStocks);
       await persistInventory(nextStocks);
@@ -546,7 +559,7 @@ export function SalePurchaseTransactions({
         id: `stock-${Date.now()}`,
         name: stockName.trim(),
         category: "",
-        stock: qty,
+        stock: toBaseQuantity({ purchaseUnitSize }, pieces),
         unit,
         purchaseUnitSize,
         cupUsageAmount,
@@ -556,7 +569,7 @@ export function SalePurchaseTransactions({
       const newRestock: RestockRecord = {
         id: Date.now().toString() + Math.random(),
         itemName: stockName,
-        quantityAdded: qty,
+        quantityAdded: toBaseQuantity({ purchaseUnitSize }, pieces),
         date: getNowDateTime(),
       };
       const nextRestocks = [newRestock, ...restocks];
@@ -600,7 +613,7 @@ export function SalePurchaseTransactions({
   const handleEditStock = (s: StockItem) => {
     setEditStockId(s.id);
     setStockName(s.name);
-    setStockQty(s.stock.toString());
+    setStockQty(toPieceQuantity(s, s.stock).toString());
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
     setStockCupUsageAmount(s.cupUsageAmount?.toString() ?? "");
@@ -621,8 +634,9 @@ export function SalePurchaseTransactions({
   const handleInlineRestock = async (item: StockItem) => {
     const amountStr = inlineRestockValues[item.id];
     if (!amountStr) return;
-    const addQty = Number(amountStr);
-    if (isNaN(addQty) || addQty <= 0) return;
+  const pieces = Number(amountStr);
+  if (isNaN(pieces) || pieces <= 0) return;
+  const addQty = toBaseQuantity(item, pieces);
     const nowTime = getNowDateTime();
 
     const nextStocks = stocks.map((s) => s.id === item.id ? { ...s, stock: s.stock + addQty } : s);
@@ -644,8 +658,10 @@ export function SalePurchaseTransactions({
   const handleSaveRestock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restockItem || !restockQty) return;
-    const qty = Number(restockQty);
-    const saveDate = editRestockId
+  const pieces = Number(restockQty);
+  const restockStockItem = stocks.find((item) => namesMatch(item.name, restockItem));
+  const qty = restockStockItem ? toBaseQuantity(restockStockItem, pieces) : pieces;
+  const saveDate = editRestockId
       ? (restocks.find((record) => record.id === editRestockId)?.date ?? restockDate)
       : filterMode === "date"
         ? filterDate
@@ -1014,9 +1030,9 @@ export function SalePurchaseTransactions({
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
-                      <td className="p-2 border-r border-neutral-200 text-right">{opening.toFixed(2)} pcs</td>
+                      <td className="p-2 border-r border-neutral-200 text-right">{toPieceQuantity(s, opening).toFixed(2)} pcs</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-semibold text-black">
-                        {restocked > 0 ? `+${restocked}` : 0} pcs
+                        {restocked > 0 ? `+${toPieceQuantity(s, restocked).toFixed(2)}` : "0.00"} pcs
                       </td>
                       <td className="p-1 border-r border-neutral-200 text-right text-red-600 font-medium">
                         <input
@@ -1036,18 +1052,18 @@ export function SalePurchaseTransactions({
                           aria-label={`Remaining stock for ${s.name}`}
                           type="number"
                           min="0"
-                          value={remaining}
+                          value={toPieceQuantity(s, remaining)}
                           readOnly={!isLiveDate}
                           onChange={(e) => {
                             if (!isLiveDate) return;
-                            const nextStock = Math.max(0, Number(e.target.value) || 0);
+                            const nextStock = Math.max(0, toBaseQuantity(s, Number(e.target.value) || 0));
                             setStocks((currentStocks) =>
                               currentStocks.map((item) => item.id === s.id ? { ...item, stock: nextStock } : item),
                             );
                           }}
                           onBlur={(e) => {
                             if (!isLiveDate) return;
-                            const nextStock = Math.max(0, Number(e.target.value) || 0);
+                            const nextStock = Math.max(0, toBaseQuantity(s, Number(e.target.value) || 0));
                             const nextStocks = stocksRef.current.map((item) =>
                               item.id === s.id ? { ...item, stock: nextStock } : item,
                             );
