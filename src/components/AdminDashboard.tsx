@@ -379,8 +379,15 @@ export function AdminDashboard({ store }: { store: StoreData }) {
 
   const netProfitOrLoss = totalSalesAmount - (totalExpensesAmount + totalCreditsAmount);
 
-  const drinks = unitsSold(productStatsList);
-  
+  const drinksSold = unitsSold(productStatsList);
+  const foodSold = productStatsList
+    .filter((item) => item.category === "Food")
+    .reduce((sum, item) => sum + item.qty, 0);
+  const pastriesSold = productStatsList
+    .filter((item) => item.category === "Pastries")
+    .reduce((sum, item) => sum + item.qty, 0);
+  const totalSold = drinksSold + foodSold + pastriesSold;
+
   const computedAverageTicket = filteredOrdersList.length > 0 
     ? totalSalesAmount / filteredOrdersList.length 
     : 0;
@@ -627,11 +634,30 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             }
           />
 
-          <Metric
-            label="Drinks Sold"
-            value={String(drinks)}
-            hint={`Selected period`}
-          />
+          <div className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
+            <p className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
+              Sold Products
+            </p>
+            <div className="mt-2 space-y-1.5 sm:mt-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-neutral-500">Drinks</span>
+                <span className="text-lg font-semibold sm:text-2xl">{drinksSold}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-neutral-500">Food</span>
+                <span className="text-lg font-semibold sm:text-2xl">{foodSold}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-neutral-500">Pastries</span>
+                <span className="text-lg font-semibold sm:text-2xl">{pastriesSold}</span>
+              </div>
+              <div className="flex items-baseline justify-between border-t border-neutral-100 pt-1.5">
+                <span className="text-xs font-medium text-neutral-700">Total Sold</span>
+                <span className="text-lg font-semibold sm:text-2xl">{totalSold}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-neutral-500">Selected period</p>
+          </div>
 
           <Metric
             label="Peak Hour"
