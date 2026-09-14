@@ -256,59 +256,15 @@ function cupForDrink(
 export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
   const menuItem = store.menu.find((item) => item.id === line.productId);
   const name = menuItem?.name || line.name;
-  const category = menuItem?.category || "";
-  const ingredients: RecipeIngredient[] = [];
+  const savedRecipe = Object.entries(store.recipes ?? {}).find(
+    ([recipeName]) => recipeName.trim().toLowerCase() === name.trim().toLowerCase(),
+  )?.[1];
 
-  function addInventory(item: InventoryItem | undefined, amount: number, unit?: string) {
-    if (!item || amount <= 0) return;
-    ingredients.push({
-      inventoryItemId: item.id,
-      name: item.name,
-      amount,
-      unit: unit || item.unit || "pcs",
-    });
-  }
+  // Inventory is deducted only from ingredients explicitly configured for the drink.
+  if (savedRecipe) return savedRecipe.filter((ingredient) => Number(ingredient.amount) > 0);
 
-  function addByCosting(item: InventoryItem | undefined, fallbackPerCup: number) {
-    if (!item) return;
-    const recipe = costingIngredientForItem(store.costings, item.name);
-    addInventory(item, recipe ? perCupAmount(recipe) : fallbackPerCup, recipe?.unit || item.unit);
-  }
+  return [];
 
-  const beans = findInventory(
-    store.inventory,
-    (item) => item.id === "coffee-beans" || /coffee bean/i.test(item.name),
-  );
-  const milk = findInventory(store.inventory, (item) => item.id === "milk" || /^milk$/i.test(item.name));
-  const matcha = findInventory(
-    store.inventory,
-    (item) => item.id === "matcha-powder" || /matcha/i.test(item.name),
-  );
-  const sugar = findInventory(
-    store.inventory,
-    (item) => item.id === "sugar" || /^sugar$/i.test(item.name),
-  );
-  const peta = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-peta");
-  const daba = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-daba");
-  const hot = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-hot");
-
-  if (isMatchaDrink(name, category)) {
-    addByCosting(matcha, 10);
-    addByCosting(sugar, 10);
-  } else if (isCoffeeCategory(category)) {
-    addByCosting(beans, 18);
-    addByCosting(milk, 1000 / 75);
-    addByCosting(sugar, 10);
-  } else if (isMilkDrink(category)) {
-    addByCosting(milk, 1000 / 75);
-    addByCosting(sugar, 10);
-  }
-
-  if (isDrinkCategory(category)) {
-    addInventory(cupForDrink(category, styleFromLine(line), peta, daba, hot), 1, "pcs");
-  }
-
-  return ingredients;
 }
 
 export function recipeForMenuPreview(store: StoreData, item: MenuItem): RecipeIngredient[] {
