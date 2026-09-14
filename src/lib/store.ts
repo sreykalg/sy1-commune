@@ -135,14 +135,7 @@ const DEFAULT_COSTINGS: CostingItem[] = [
   { id: "cost-matcha", productName: "Matcha Powder", ingredients: [{ name: "Matcha Powder", amount: 150, unit: "grams", outputCups: 15 }] },
 ];
 
-const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = Object.fromEntries(
-  DEFAULT_MENU.map((item) => [item.id, [
-    { inventoryItemId: "coffee-beans", name: "Coffee Beans", amount: 18, unit: "grams" },
-    { inventoryItemId: "milk", name: "Milk", amount: 13.33, unit: "ml" },
-    { inventoryItemId: "sugar", name: "Sugar", amount: 10, unit: "grams" },
-    { inventoryItemId: "cups-peta", name: "Peta Cup", amount: 1, unit: "pcs" },
-  ]]),
-);
+const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = {};
 
 function emptyStore(): StoreData {
   return {
@@ -297,17 +290,20 @@ function normalizeStore(store: StoreData): StoreData {
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);
   } else {
+    const menuIds = new Set(store.menu.map((item) => item.id));
     store.recipes = Object.fromEntries(
-      Object.entries(store.recipes).map(([productId, ingredients]) => [
-        productId,
-        Array.isArray(ingredients)
-          ? ingredients.map((ingredient) =>
-              ingredient.inventoryItemId === "milk" && Number(ingredient.amount) >= 100
-                ? { ...ingredient, amount: 13.33, unit: "ml" }
-                : ingredient,
-            )
-          : [],
-      ]),
+      Object.entries(store.recipes)
+        .filter(([recipeKey]) => !menuIds.has(recipeKey))
+        .map(([recipeName, ingredients]) => [
+          recipeName,
+          Array.isArray(ingredients)
+            ? ingredients.map((ingredient) =>
+                ingredient.inventoryItemId === "milk" && Number(ingredient.amount) >= 100
+                  ? { ...ingredient, amount: 13.33, unit: "ml" }
+                  : ingredient,
+              )
+            : [],
+        ]),
     );
   }
   if (!Array.isArray(store.usageLogs)) {
