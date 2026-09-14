@@ -757,27 +757,29 @@ export function SalePurchaseTransactions({
       {activeTab === "recipes" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4">
-            <div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients</h3><p className="mt-1 text-xs text-neutral-500">Create an ingredient once, then assign it to multiple drinks.</p></div>
+            <div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients per Drink</h3><p className="mt-1 text-xs text-neutral-500">Create one costing, then assign its drink coverage.</p></div>
             <button type="button" onClick={() => setIngredientAssignments((rows) => [...rows, { inventoryItemId: "", name: "", amount: 0, unit: "ml", drinks: [] }])} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Ingredient</button>
           </div>
-          <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white">
-            <table className="w-full min-w-[980px] text-left text-sm">
-              <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3">Add drinks</th><th className="p-3 text-center">Actions</th></tr></thead>
-              <tbody>
-                {ingredientAssignments.map((row, index) => {
-                  const assignedElsewhere = new Set(ingredientAssignments.flatMap((other, otherIndex) => otherIndex === index ? [] : other.drinks));
-                  return <tr key={index} className="border-b border-neutral-200 align-top">
-                    <td className="p-2 space-y-2"><select value={row.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateIngredientAssignment(index, { inventoryItemId: event.target.value, name: item?.name ?? row.name, unit: item?.unit ?? row.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{row.inventoryItemId === "other" && <input value={row.name} onChange={(event) => updateIngredientAssignment(index, { name: event.target.value })} placeholder="Type ingredient name" className="w-full rounded border border-neutral-300 px-2 py-1.5" />}</td>
-                    <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount === 0 ? "" : row.amount} onChange={(event) => updateIngredientAssignment(index, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
-                    <td className="p-2"><input value={row.unit} onChange={(event) => updateIngredientAssignment(index, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
-                    <td className="p-2"><div className="grid max-h-32 min-w-72 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 p-2">{recipeMenu.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={row.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name)} onChange={() => toggleAssignment(index, drink.name)} />{drink.name}</label>)}</div></td>
-                    <td className="p-2 text-center"><button type="button" onClick={() => setIngredientAssignments((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-xs font-medium text-red-600">Remove</button></td>
-                  </tr>;
-                })}
-                {ingredientAssignments.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-neutral-500">No ingredients added.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+
+          {ingredientAssignments.map((row, index) => {
+            const assignedElsewhere = new Set(ingredientAssignments.flatMap((other, otherIndex) => otherIndex === index ? [] : other.drinks));
+            return <section key={index} className="overflow-hidden rounded-lg border border-neutral-400 bg-white">
+              <div className="border-b border-neutral-300 bg-neutral-50 px-4 py-3"><h3 className="text-lg font-medium text-neutral-900">{row.name || "New Ingredient"} Costing</h3></div>
+              <div className="border-b border-neutral-300 px-4 py-3">
+                <div className="mb-2 text-[11px] font-bold uppercase text-neutral-700">Add drinks</div>
+                <div className="grid max-h-32 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 bg-white p-2 sm:grid-cols-3">
+                  {recipeMenu.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={row.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name)} onChange={() => toggleAssignment(index, drink.name)} />{drink.name}</label>)}
+                </div>
+              </div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead><tbody><tr>
+                <td className="p-2 space-y-2"><select value={row.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateIngredientAssignment(index, { inventoryItemId: event.target.value, name: item?.name ?? row.name, unit: item?.unit ?? row.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{row.inventoryItemId === "other" && <input value={row.name} onChange={(event) => updateIngredientAssignment(index, { name: event.target.value })} placeholder="Type ingredient name" className="w-full rounded border border-neutral-300 px-2 py-1.5" />}</td>
+                <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount === 0 ? "" : row.amount} onChange={(event) => updateIngredientAssignment(index, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
+                <td className="p-2"><input value={row.unit} onChange={(event) => updateIngredientAssignment(index, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
+                <td className="p-2 text-center"><button type="button" onClick={() => setIngredientAssignments((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-xs font-medium text-red-600">Remove</button></td>
+              </tr></tbody></table></div>
+            </section>;
+          })}
+          {ingredientAssignments.length === 0 && <div className="rounded-lg border border-neutral-400 bg-white p-8 text-center text-sm text-neutral-500">No ingredients added.</div>}
           <div className="flex justify-end"><button type="button" onClick={() => void saveIngredientAssignments()} className="rounded bg-black px-5 py-2 text-sm font-medium text-white">Save Ingredients</button></div>
         </div>
       )}
