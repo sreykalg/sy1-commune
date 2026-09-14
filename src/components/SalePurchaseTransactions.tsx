@@ -813,7 +813,6 @@ export function SalePurchaseTransactions({
                   <th className="p-3 border-r border-white/15">Unit</th>
                   <th className="p-3 border-r border-white/15 text-right">Opening</th>
                   <th className="p-3 border-r border-white/15 text-right">Restock</th>
-                  <th className="p-3 border-r border-white/15 text-right">Used</th>
                   <th className="p-3 border-r border-white/15 text-right">Used per unit</th>
                   <th className="p-3 border-r border-white/15 text-right">Used per pcs</th>
                   <th className="p-3 border-r border-white/15 text-right">Remaining</th>
@@ -835,8 +834,6 @@ export function SalePurchaseTransactions({
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
                   const cupsLeft = recipe ? cupsFromQuantity(remaining, recipe) : null;
-                  const usageMetrics = inventoryUsageMetrics(s.name, s.unit);
-
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-3 border-r border-neutral-200 font-medium">{s.name}</td>
@@ -856,8 +853,7 @@ export function SalePurchaseTransactions({
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
-                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{usageMetrics.perUnit}</td>
-                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{usageMetrics.perPiece}</td>
+                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsageMetrics(s.name, s.unit).perPiece}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
                         <input
                           aria-label={`Remaining stock for ${s.name}`}
