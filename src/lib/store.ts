@@ -296,6 +296,19 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);
+  } else {
+    store.recipes = Object.fromEntries(
+      Object.entries(store.recipes).map(([productId, ingredients]) => [
+        productId,
+        Array.isArray(ingredients)
+          ? ingredients.map((ingredient) =>
+              ingredient.inventoryItemId === "milk" && Number(ingredient.amount) >= 100
+                ? { ...ingredient, amount: 13.33, unit: "ml" }
+                : ingredient,
+            )
+          : [],
+      ]),
+    );
   }
   if (!Array.isArray(store.usageLogs)) {
     store.usageLogs = [];
@@ -305,6 +318,17 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.costings)) {
     store.costings = [];
+  } else {
+    store.costings = store.costings.map((costing) =>
+      /milk/i.test(costing.productName) && costing.ingredients.some((ingredient) => /milk/i.test(ingredient.name))
+        ? {
+            ...costing,
+            ingredients: costing.ingredients.map((ingredient) =>
+              /milk/i.test(ingredient.name) ? { ...ingredient, amount: 1000, unit: "ml", outputCups: 75 } : ingredient,
+            ),
+          }
+        : costing,
+    );
   }
   if (!Array.isArray(store.loginActivity)) {
     store.loginActivity = [];
@@ -426,6 +450,7 @@ async function readStore(): Promise<StoreData> {
   const original = data.payload as StoreData;
   const store = normalizeStore(original);
   const originalCostings = Array.isArray(original.costings) ? original.costings : [];
+  const originalRecipes = original.recipes && typeof original.recipes === "object" ? original.recipes : {};
   const originalInventory = Array.isArray(original.inventory) ? original.inventory : [];
   const originalUsers = Array.isArray(original.users) ? original.users : [];
   const originalMenu = Array.isArray(original.menu) ? original.menu : [];
@@ -436,7 +461,8 @@ async function readStore(): Promise<StoreData> {
     return current.length !== normalized.length || current.some((style, index) => style !== normalized[index]);
   });
   if (
-    store.costings.length !== originalCostings.length ||
+    JSON.stringify(store.costings) !== JSON.stringify(originalCostings) ||
+    JSON.stringify(store.recipes) !== JSON.stringify(originalRecipes) ||
     store.inventory.length !== originalInventory.length ||
     store.inventory.some((item) => originalInventory.find((row) => row.id === item.id)?.name !== item.name) ||
     store.users.length !== originalUsers.length ||
