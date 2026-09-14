@@ -355,10 +355,26 @@ export function SalePurchaseTransactions({
       const menuItem = recipeMenu.find((item) => item.name.trim().toLowerCase() === drink.trim().toLowerCase() || item.name.trim().toLowerCase().replace(/s$/, "") === drink.trim().toLowerCase().replace(/s$/, ""));
       if (menuItem) recipes[menuItem.id] = ingredients;
     }));
-    const savedCostings = nextCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` }));
-    setRecipeCostings(savedCostings);
-    setExpandedCostings(new Set());
-    await saveAdminData({ recipes, recipeCostings: savedCostings });
+  const savedCostings = nextCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` }));
+  const configuredIngredients = savedCostings.flatMap((costing) => costing.ingredients).filter((ingredient) => ingredient.name.trim());
+  const nextStocks = [...stocks];
+  for (const ingredient of configuredIngredients) {
+    const exists = nextStocks.some((item) => namesMatch(item.name, ingredient.name));
+    if (!exists) {
+      nextStocks.push({
+        id: `stock-${Date.now()}-${nextStocks.length}`,
+        name: ingredient.name.trim(),
+        category: "",
+        stock: 0,
+        unit: ingredient.unit || "pcs",
+      });
+    }
+  }
+  setStocks(nextStocks);
+  setRecipeCostings(savedCostings);
+  setExpandedCostings(new Set());
+  await persistInventory(nextStocks);
+  await saveAdminData({ recipes, recipeCostings: savedCostings });
   }
 
   const [filterType, setFilterType] = useState("All");
