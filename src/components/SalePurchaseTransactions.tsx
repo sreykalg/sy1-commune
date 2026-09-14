@@ -212,7 +212,7 @@ export function SalePurchaseTransactions({
     name: item.name,
     category: item.category,
     stock: item.stock,
-    openingStock: item.openingStock,
+    openingStock: item.openingStock ?? (item.purchaseUnitSize ? 10 * item.purchaseUnitSize : item.stock),
     unit: item.unit || "pcs",
     purchaseUnitSize: item.purchaseUnitSize,
     cupUsageAmount: item.cupUsageAmount,
