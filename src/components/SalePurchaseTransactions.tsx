@@ -183,7 +183,7 @@ type UsageRecord = {
 
 export function SalePurchaseTransactions({
   store,
-  tabs = ["transactions", "stock", "restock", "costing", "used", "recipes"],
+  tabs = ["transactions", "stock", "restock", "used", "recipes"],
   activeTab: controlledActiveTab,
   onTabChange,
   showTabs = true,
