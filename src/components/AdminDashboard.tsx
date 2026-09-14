@@ -981,11 +981,13 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                   <p className="hidden min-w-0 text-sm font-medium lg:block">
                     {isVoided(order) ? "" : orderIdLabel(order)}
                   </p>
-                  <p className="min-w-0 text-xs leading-relaxed break-words text-neutral-600 lg:text-sm">
-                    {order.items
-                      .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
-                      .join(", ")}
-                  </p>
+                  <ul className="min-w-0 list-disc space-y-1 pl-4 text-xs leading-relaxed text-neutral-600 lg:text-sm">
+                    {order.items.map((item, itemIdx) => (
+                      <li key={`${order.id}-${item.productId}-${itemIdx}`} className="break-words">
+                        {item.qty}× {orderLineListLabel(item)}
+                      </li>
+                    ))}
+                  </ul>
                   <div className="min-w-0">
                     <span
                       className={`inline-flex rounded px-2 py-0.5 text-[10px] font-medium lg:text-xs ${
