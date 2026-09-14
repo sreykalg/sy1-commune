@@ -608,13 +608,16 @@ export function PosClient({
     });
   }
 
+  const canPrint = Boolean(lastOrderId) && cart.length === 0 && !voidRequestPending;
+
   function printTicket() {
-    const order =
-      (lastOrderId
-        ? availableOrders.find((entry) => entry.id === lastOrderId)
-        : undefined) ?? availableOrders[0];
+    if (!canPrint || !lastOrderId) {
+      setMessage("Charge the order before printing.");
+      return;
+    }
+    const order = availableOrders.find((entry) => entry.id === lastOrderId);
     if (!order) {
-      setMessage("Complete an order before opening the print flow.");
+      setMessage("Charge the order before printing.");
       return;
     }
     setPrintOrderId(order.id);
@@ -1860,10 +1863,11 @@ export function PosClient({
                 <button
                   type="button"
                   onClick={printTicket}
+                  disabled={!canPrint}
                   className={`rounded-lg border py-2 text-xs transition ${
-                    labelPrinter.connected || receiptPrinter.connected || availableOrders.length > 0
-                      ? "border-black bg-black text-white"
-                      : "border-neutral-300 hover:border-black"
+                    canPrint
+                      ? "border-black bg-black text-white hover:bg-neutral-800"
+                      : "border-neutral-300 text-neutral-400"
                   }`}
                 >
                   Print
@@ -1911,19 +1915,23 @@ export function PosClient({
                     setPaymentMethod("cash");
                     setPromoId(null);
                     setPromoOpen(false);
+                    setMessage(
+                      `Paid ${formatMoney(result.total ?? 0)}. Tap Print for labels and receipt.`,
+                    );
                     const labelJobs = result.printJobs.filter(
                       (job) => job.type === "cup-label",
                     );
                     const receiptJobs = result.printJobs.filter(
                       (job) => job.type === "customer-receipt",
                     );
-                    const [labelResults, receiptResults] = await Promise.all([
+                    void Promise.all([
                       attemptPrintJobs(labelJobs, savedOrder),
                       attemptPrintJobs(receiptJobs, savedOrder),
-                    ]);
-                    setMessage(
-                      `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
-                    );
+                    ]).then(([labelResults, receiptResults]) => {
+                      setMessage(
+                        `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
+                      );
+                    });
                   })
                 }
                 className="relative w-full rounded-xl border-2 border-black py-2.5 text-xs font-medium transition active:scale-[0.99] disabled:opacity-40"
