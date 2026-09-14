@@ -1075,7 +1075,7 @@ export function SalePurchaseTransactions({
                           aria-label={`Remaining stock for ${s.name}`}
                           type="number"
                           min="0"
-                          value={toPieceQuantity(s, remaining)}
+                          value={toPieceQuantity(s, remaining).toFixed(2)}
                           readOnly={!isLiveDate}
                           onChange={(e) => {
                             if (!isLiveDate) return;
