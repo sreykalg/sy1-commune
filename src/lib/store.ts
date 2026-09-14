@@ -292,13 +292,8 @@ function normalizeStore(store: StoreData): StoreData {
   } else {
     const menuIds = new Set(store.menu.map((item) => item.id));
     const isLegacyDefaultRecipe = (ingredients: RecipeIngredient[]) => {
-      const legacy = ingredients.map((ingredient) => `${ingredient.inventoryItemId}:${ingredient.amount}:${ingredient.unit}`).sort();
-      return legacy.join("|") === [
-        "coffee-beans:18:grams",
-        "cups-peta:1:pcs",
-        "milk:13.33:ml",
-        "sugar:10:grams",
-      ].sort().join("|");
+      const legacyIds = new Set(["coffee-beans", "milk", "sugar", "cups-peta", "cups-daba", "cups-hot", "matcha-powder"]);
+      return ingredients.length > 0 && ingredients.every((ingredient) => legacyIds.has(ingredient.inventoryItemId));
     };
     store.recipes = Object.fromEntries(
       Object.entries(store.recipes)
@@ -318,11 +313,19 @@ function normalizeStore(store: StoreData): StoreData {
   if (!Array.isArray(store.usageLogs)) {
     store.usageLogs = [];
   } else {
-    store.usageLogs = store.usageLogs.map((usage) =>
-      /milk/i.test(usage.itemName) && Number(usage.usedAmount) >= 100
-        ? { ...usage, usedAmount: Number((Number(usage.usedAmount) / 10).toFixed(2)), unit: "ml" }
-        : usage,
-    );
+    const configuredRecipeKeys = new Set(Object.keys(store.recipes));
+    const menuNameById = new Map(store.menu.map((item) => [item.id, item.name]));
+    store.usageLogs = store.usageLogs
+      .filter((usage) => {
+        if (!usage.orderId || !usage.orderItemId) return true;
+        const recipeName = menuNameById.get(usage.orderItemId);
+        return configuredRecipeKeys.has(usage.orderItemId) || (recipeName ? configuredRecipeKeys.has(recipeName) : false);
+      })
+      .map((usage) =>
+        /milk/i.test(usage.itemName) && Number(usage.usedAmount) >= 100
+          ? { ...usage, usedAmount: Number((Number(usage.usedAmount) / 10).toFixed(2)), unit: "ml" }
+          : usage,
+      );
   }
   if (!Array.isArray(store.restocks)) {
     store.restocks = [];
