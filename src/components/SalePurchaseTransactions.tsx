@@ -913,10 +913,6 @@ export function SalePurchaseTransactions({
                   });
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
-                  const costingIngredient = recipeCostings
-                    .flatMap((costing) => costing.ingredients)
-                    .find((ingredient) => namesMatch(ingredient.name, s.name));
-                  const usedPerUnit = costingIngredient ? Number(costingIngredient.amount) || 0 : used;
                   const cupsLeft = recipe ? cupsFromQuantity(remaining, recipe) : null;
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
@@ -928,11 +924,12 @@ export function SalePurchaseTransactions({
                       </td>
                       <td className="p-2 border-r border-neutral-200 text-right text-red-600 font-medium">
                         <input
-                          aria-label={`Costing usage per unit for ${s.name}`}
+                          aria-label={`Used stock for ${s.name}`}
                           type="number"
                           min="0"
-                          value={usedPerUnit}
-                          readOnly
+                          value={used}
+                          readOnly={!isLiveDate}
+                          onChange={(e) => handleTotalUsedChange(s.name, e.target.value)}
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
