@@ -130,7 +130,7 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
 
 const DEFAULT_COSTINGS: CostingItem[] = [
   { id: "cost-coffee-beans", productName: "Coffee Beans", ingredients: [{ name: "Coffee Beans", amount: 1000, unit: "grams", outputCups: 55 }] },
-  { id: "cost-milk", productName: "Milk", ingredients: [{ name: "Milk", amount: 1000, unit: "ml", outputCups: 7.5 }] },
+  { id: "cost-milk", productName: "Milk", ingredients: [{ name: "Milk", amount: 1000, unit: "ml", outputCups: 75 }] },
   { id: "cost-sugar", productName: "Sugar", ingredients: [{ name: "Sugar", amount: 1000, unit: "grams", outputCups: 100 }] },
   { id: "cost-matcha", productName: "Matcha Powder", ingredients: [{ name: "Matcha Powder", amount: 150, unit: "grams", outputCups: 15 }] },
 ];
@@ -138,7 +138,7 @@ const DEFAULT_COSTINGS: CostingItem[] = [
 const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = Object.fromEntries(
   DEFAULT_MENU.map((item) => [item.id, [
     { inventoryItemId: "coffee-beans", name: "Coffee Beans", amount: 18, unit: "grams" },
-    { inventoryItemId: "milk", name: "Milk", amount: 133, unit: "ml" },
+    { inventoryItemId: "milk", name: "Milk", amount: 13.33, unit: "ml" },
     { inventoryItemId: "sugar", name: "Sugar", amount: 10, unit: "grams" },
     { inventoryItemId: "cups-peta", name: "Peta Cup", amount: 1, unit: "pcs" },
   ]]),

@@ -297,10 +297,10 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
     addByCosting(sugar, 10);
   } else if (isCoffeeCategory(category)) {
     addByCosting(beans, 18);
-    addByCosting(milk, 1000 / 7.5);
+    addByCosting(milk, 1000 / 75);
     addByCosting(sugar, 10);
   } else if (isMilkDrink(category)) {
-    addByCosting(milk, 1000 / 7.5);
+    addByCosting(milk, 1000 / 75);
     addByCosting(sugar, 10);
   }
 
