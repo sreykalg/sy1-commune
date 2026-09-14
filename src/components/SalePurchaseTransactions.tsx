@@ -493,8 +493,10 @@ export function SalePurchaseTransactions({
         stock: item.stock,
         unit: item.unit || existing?.unit || "pcs",
         cost: existing?.cost ?? 0,
-        maxStock: existing?.maxStock ?? item.stock,
-      };
+      maxStock: existing?.maxStock ?? item.stock,
+      purchaseUnitSize: item.purchaseUnitSize,
+      cupUsageAmount: item.cupUsageAmount,
+    };
     });
     await saveAdminData({ inventory });
   }
@@ -570,6 +572,20 @@ export function SalePurchaseTransactions({
       cupUsageAmount: draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount,
       [field]: parsed,
     } : item);
+    setStocks(nextStocks);
+    await persistInventory(nextStocks);
+  };
+
+  const saveUnitSetup = async () => {
+    await persistInventory(stocks);
+    setUnitSetupDrafts({});
+  };
+
+  const addUnitSetupItem = async () => {
+    const name = window.prompt("Item name");
+    if (!name?.trim()) return;
+    if (stocks.some((item) => item.name.trim().toLowerCase() === name.trim().toLowerCase())) return;
+    const nextStocks = [...stocks, { id: `stock-${Date.now()}`, name: name.trim(), category: "Ingredients", stock: 0, unit: "pcs" }];
     setStocks(nextStocks);
     await persistInventory(nextStocks);
   };
@@ -823,14 +839,14 @@ export function SalePurchaseTransactions({
 
       {activeTab === "units" && (
         <section className="space-y-4">
-          <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4">
-            <h2 className="text-sm font-bold uppercase text-neutral-800">Unit Setup</h2>
-            <p className="mt-1 text-xs text-neutral-600">Set how much one purchased unit contains and how much one cup uses. New stock items appear here automatically.</p>
+          <div className="flex items-center justify-between rounded-lg border border-neutral-300 bg-neutral-50 p-4">
+            <div><h2 className="text-sm font-bold uppercase text-neutral-800">Unit Setup</h2><p className="mt-1 text-xs text-neutral-600">Set your own unit rules. New items can be added here.</p></div>
+            <div className="flex gap-2"><button type="button" onClick={() => void addUnitSetupItem()} className="rounded bg-black px-3 py-2 text-xs font-semibold text-white">Add item</button><button type="button" onClick={() => void saveUnitSetup()} className="rounded border border-black px-3 py-2 text-xs font-semibold text-black">Save setup</button></div>
           </div>
           <div className="overflow-x-auto rounded-lg border border-neutral-300">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Item</th><th className="p-3">Total Unit Item</th><th className="p-3">Unit Item</th><th className="p-3">Unit</th><th className="p-3">Cups make</th></tr></thead>
-              <tbody>{stocks.map((item) => <tr key={item.id} className="border-b border-neutral-200 last:border-0"><td className="p-3 font-medium">{item.name}</td><td className="p-3"><input type="number" min="0" step="any" value={unitSetupDrafts[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? "")} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: value, unit: current[item.id]?.unit ?? item.unit, cupUsageAmount: current[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "") } })); }} onBlur={(event) => void updateUnitSetup(item.id, "purchaseUnitSize", event.target.value)} placeholder="e.g. 1000" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3"><input type="text" value={unitSetupDrafts[item.id]?.unit ?? item.unit} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: current[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? ""), unit: value, cupUsageAmount: current[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "") } })); }} onBlur={(event) => void updateUnitSetup(item.id, "unit", event.target.value)} placeholder="grams, pcs, ml, kg" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3"><input type="number" min="0" step="any" value={unitSetupDrafts[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "")} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: current[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? ""), unit: current[item.id]?.unit ?? item.unit, cupUsageAmount: value } })); }} onBlur={(event) => void updateUnitSetup(item.id, "cupUsageAmount", event.target.value)} placeholder="e.g. 9" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3 text-neutral-600">{(() => { const total = Number(unitSetupDrafts[item.id]?.purchaseUnitSize ?? item.purchaseUnitSize); const perCup = Number(unitSetupDrafts[item.id]?.cupUsageAmount ?? item.cupUsageAmount); return total > 0 && perCup > 0 ? (total / perCup).toFixed(2) : "—"; })()}</td></tr>)}</tbody>
+              <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Item</th><th className="p-3">Total Unit Item</th><th className="p-3">Unit Item</th><th className="p-3">Unit</th><th className="p-3">Cups make</th><th className="p-3">Actions</th></tr></thead>
+              <tbody>{stocks.map((item) => <tr key={item.id} className="border-b border-neutral-200 last:border-0"><td className="p-3 font-medium"><div className="flex items-center justify-between gap-3"><span>{item.name}</span><button type="button" onClick={() => void handleDeleteStock(item.id)} className="text-xs font-semibold text-red-600 hover:underline">Delete</button></div></td><td className="p-3"><input type="number" min="0" step="any" value={unitSetupDrafts[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? "")} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: value, unit: current[item.id]?.unit ?? item.unit, cupUsageAmount: current[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "") } })); }} onBlur={(event) => void updateUnitSetup(item.id, "purchaseUnitSize", event.target.value)} placeholder="e.g. 1000" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3"><input type="text" value={unitSetupDrafts[item.id]?.unit ?? item.unit} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: current[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? ""), unit: value, cupUsageAmount: current[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "") } })); }} onBlur={(event) => void updateUnitSetup(item.id, "unit", event.target.value)} placeholder="grams, pcs, ml, kg" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3"><input type="number" min="0" step="any" value={unitSetupDrafts[item.id]?.cupUsageAmount ?? (item.cupUsageAmount?.toString() ?? "")} onChange={(event) => { const value = event.target.value; setUnitSetupDrafts((current) => ({ ...current, [item.id]: { purchaseUnitSize: current[item.id]?.purchaseUnitSize ?? (item.purchaseUnitSize?.toString() ?? ""), unit: current[item.id]?.unit ?? item.unit, cupUsageAmount: value } })); }} onBlur={(event) => void updateUnitSetup(item.id, "cupUsageAmount", event.target.value)} placeholder="e.g. 9" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3 text-neutral-600">{(() => { const total = Number(unitSetupDrafts[item.id]?.purchaseUnitSize ?? item.purchaseUnitSize); const perCup = Number(unitSetupDrafts[item.id]?.cupUsageAmount ?? item.cupUsageAmount); return total > 0 && perCup > 0 ? (total / perCup).toFixed(2) : "—"; })()}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
