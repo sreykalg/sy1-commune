@@ -147,8 +147,9 @@ function emptyStore(): StoreData {
     promotions: DEFAULT_PROMOS.map((item) => ({ ...item })),
     users: DEFAULT_USERS.map((item) => ({ ...item })),
     inventory: DEFAULT_INVENTORY.map((item) => ({ ...item })),
-    recipes: structuredClone(DEFAULT_RECIPES),
-    usageLogs: [],
+  recipes: structuredClone(DEFAULT_RECIPES),
+  recipeCostings: [],
+  usageLogs: [],
     restocks: [],
     costings: structuredClone(DEFAULT_COSTINGS),
     loginActivity: [],
@@ -286,6 +287,11 @@ function normalizeStore(store: StoreData): StoreData {
       unit: item.unit || "pcs",
     }));
     store.inventory = ensureCupTypes(store.inventory);
+  }
+  if (!Array.isArray(store.recipeCostings)) {
+    store.recipeCostings = [];
+  } else {
+    store.recipeCostings = store.recipeCostings.filter((costing) => costing && typeof costing.id === "string" && typeof costing.name === "string" && Array.isArray(costing.drinks) && Array.isArray(costing.ingredients));
   }
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);

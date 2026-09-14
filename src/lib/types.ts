@@ -112,6 +112,13 @@ export type RecipeIngredient = {
   unit: string;
 };
 
+export type RecipeCosting = {
+  id: string;
+  name: string;
+  drinks: string[];
+  ingredients: RecipeIngredient[];
+};
+
 export type UsageLog = {
   id: string;
   orderId: string;
@@ -192,6 +199,7 @@ export type StoreData = {
   users: StaffUser[];
   inventory: InventoryItem[];
   recipes: Record<string, RecipeIngredient[]>;
+  recipeCostings: RecipeCosting[];
   usageLogs: UsageLog[];
   restocks: RestockRecord[];
   costings: CostingItem[];

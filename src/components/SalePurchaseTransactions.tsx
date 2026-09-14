@@ -20,7 +20,7 @@ export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "u
 type InventoryStore = Pick<
   StoreData,
   "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
-> & Partial<Pick<StoreData, "recipes" | "menu">>;
+> & Partial<Pick<StoreData, "recipes" | "recipeCostings" | "menu">>;
 
 type SalePurchaseTransactionsProps = {
   store: InventoryStore;
@@ -275,16 +275,17 @@ export function SalePurchaseTransactions({
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const recipeMenu = store.menu ?? [];
   const recipeMap = store.recipes ?? {};
-  type Costing = { name: string; drinks: string[]; ingredients: RecipeIngredient[] };
+  type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[] };
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
 
   useEffect(() => {
-    setRecipeCostings(Object.entries(recipeMap).map(([drink, ingredients]) => ({
-      name: `${drink} Costing`,
-      drinks: [drink],
-      ingredients,
-    })));
-  }, [recipeMap]);
+    const saved = store.recipeCostings ?? [];
+    if (saved.length > 0) {
+      setRecipeCostings(saved);
+    } else {
+      setRecipeCostings([]);
+    }
+  }, [store.recipeCostings]);
 
   function updateCosting(index: number, patch: Partial<Costing>) {
     setRecipeCostings((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
@@ -310,7 +311,10 @@ export function SalePurchaseTransactions({
     recipeCostings.forEach((costing) => costing.drinks.forEach((drink) => {
       recipes[drink] = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
     }));
-    await saveAdminData({ recipes });
+    await saveAdminData({
+      recipes,
+      recipeCostings: recipeCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` })),
+    });
   }
 
   const [filterType, setFilterType] = useState("All");
