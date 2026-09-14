@@ -985,17 +985,17 @@ export function SalePurchaseTransactions({
           <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white">
             <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
-                <tr className="bg-black border-b border-black text-white text-xs font-semibold">
-                  <th className="p-3 border-r border-white/15">Item</th>
-                  <th className="p-3 border-r border-white/15">Unit</th>
-                  <th className="p-3 border-r border-white/15 text-right">Opening</th>
-                  <th className="p-3 border-r border-white/15 text-right">Restock</th>
-                  <th className="p-3 border-r border-white/15 text-right">Used per unit</th>
-                  <th className="p-3 border-r border-white/15 text-right">Used per pcs</th>
-                  <th className="p-3 border-r border-white/15 text-right">Remaining</th>
-                  <th className="p-3 border-r border-white/15 text-right">Cups left</th>
-                  <th className="p-3 border-r border-white/15 text-center">Restock</th>
-                  <th className="p-3 text-center">Actions</th>
+                <tr className="bg-white border-b border-neutral-300 text-black text-xs font-semibold">
+                  <th className="p-2 border-r border-neutral-300">Item</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Opening</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Restock</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Used per Unit</th>
+                  <th className="p-2 border-r border-neutral-300">Unit</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Used per Pcs</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Remaining</th>
+                  <th className="p-2 border-r border-neutral-300 text-right">Cups Left</th>
+                  <th className="p-2 border-r border-neutral-300 text-center">Restock</th>
+                  <th className="p-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1013,13 +1013,12 @@ export function SalePurchaseTransactions({
                   const cupsLeft = recipe ? cupsFromQuantity(remaining, recipe) : null;
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
-                      <td className="p-3 border-r border-neutral-200 font-medium">{s.name}</td>
-                      <td className="p-3 border-r border-neutral-200 text-neutral-600">{s.unit}</td>
-                      <td className="p-3 border-r border-neutral-200 text-right">{opening.toFixed(2)}</td>
-                      <td className="p-3 border-r border-neutral-200 text-right font-semibold text-black">
-                        {restocked > 0 ? `+${restocked}` : 0}
+                      <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
+                      <td className="p-2 border-r border-neutral-200 text-right">{opening.toFixed(2)} {s.unit}</td>
+                      <td className="p-2 border-r border-neutral-200 text-right font-semibold text-black">
+                        {restocked > 0 ? `+${restocked}` : 0} {s.unit}
                       </td>
-                      <td className="p-2 border-r border-neutral-200 text-right text-red-600 font-medium">
+                      <td className="p-1 border-r border-neutral-200 text-right text-red-600 font-medium">
                         <input
                           aria-label={`Used stock for ${s.name}`}
                           type="number"
@@ -1030,7 +1029,8 @@ export function SalePurchaseTransactions({
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
-                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s, Number(used))}</td>
+                      <td className="p-2 border-r border-neutral-200 text-neutral-600">{s.unit}</td>
+                      <td className="p-2 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s, Number(used))}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
                         <input
                           aria-label={`Remaining stock for ${s.name}`}
