@@ -151,6 +151,7 @@ type StockItem = {
   unit: string;
   purchaseUnitSize?: number;
   cupUsageAmount?: number;
+  cupsMake?: number;
 };
 
 type RestockRecord = {
@@ -262,6 +263,7 @@ export function SalePurchaseTransactions({
   const [stockUnit, setStockUnit] = useState("grams");
   const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
   const [stockCupUsageAmount, setStockCupUsageAmount] = useState("");
+  const [stockCupsMake, setStockCupsMake] = useState("");
 
   function resetStockForm() {
     setEditStockId(null);
@@ -270,6 +272,7 @@ export function SalePurchaseTransactions({
     setStockUnit("grams");
     setStockPurchaseUnitSize("");
     setStockCupUsageAmount("");
+    setStockCupsMake("");
   }
 
   const [editRestockId, setEditRestockId] = useState<string | null>(null);
@@ -528,11 +531,12 @@ export function SalePurchaseTransactions({
     const unit = stockUnit.trim() || "pcs";
     const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
     const cupUsageAmount = stockCupUsageAmount.trim() ? Number(stockCupUsageAmount) : undefined;
-    if ([purchaseUnitSize, cupUsageAmount].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
+    const cupsMake = stockCupsMake.trim() ? Number(stockCupsMake) : undefined;
+    if ([purchaseUnitSize, cupUsageAmount, cupsMake].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName.trim(), stock: qty, unit, purchaseUnitSize, cupUsageAmount } : s,
+        s.id === editStockId ? { ...s, name: stockName.trim(), stock: qty, unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
       );
       setStocks(nextStocks);
       await persistInventory(nextStocks);
@@ -546,6 +550,7 @@ export function SalePurchaseTransactions({
         unit,
         purchaseUnitSize,
         cupUsageAmount,
+        cupsMake,
       };
       const nextStocks = [...stocks, newItem];
       const newRestock: RestockRecord = {
@@ -599,6 +604,7 @@ export function SalePurchaseTransactions({
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
     setStockCupUsageAmount(s.cupUsageAmount?.toString() ?? "");
+    setStockCupsMake(s.cupsMake?.toString() ?? "");
   };
 
   const handleDeleteStock = async (id: string) => {
@@ -943,7 +949,7 @@ export function SalePurchaseTransactions({
           {stockNotice ? <p className="text-sm text-red-600">{stockNotice}</p> : null}
           <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
             <h3 className="text-xs font-bold text-neutral-700 uppercase">{editStockId ? "Edit Stock Item" : "Add Stock Item"}</h3>
-            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
+            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-4 items-end">
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Item Name</label>
                 <input type="text" placeholder="e.g. Coffee Beans" value={stockName} onChange={(e) => setStockName(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
@@ -955,6 +961,10 @@ export function SalePurchaseTransactions({
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Unit Item</label>
                 <input type="number" placeholder="e.g. 9" value={stockCupUsageAmount} onChange={(e) => setStockCupUsageAmount(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Cups make</label>
+                <input type="number" min="0" step="any" placeholder="e.g. 111.11" value={stockCupsMake} onChange={(e) => setStockCupsMake(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Quantity</label>
