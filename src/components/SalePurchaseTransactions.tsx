@@ -9,7 +9,7 @@ function inventoryUsagePerPiece(item: StockItem, used: number) {
   return unitSize > 0 ? `${(used / unitSize).toFixed(2)} pc` : "—";
 }
 
-export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used" | "recipes";
+export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used" | "units" | "recipes";
 
 type InventoryStore = Pick<
   StoreData,
@@ -178,7 +178,7 @@ type UsageRecord = {
 
 export function SalePurchaseTransactions({
   store,
-  tabs = ["transactions", "stock", "restock", "recipes", "used"],
+  tabs = ["transactions", "stock", "restock", "recipes", "used", "units"],
   activeTab: controlledActiveTab,
   onTabChange,
   showTabs = true,
@@ -197,6 +197,7 @@ export function SalePurchaseTransactions({
     category: item.category,
     stock: item.stock,
     unit: item.unit || "pcs",
+    purchaseUnitSize: item.purchaseUnitSize,
   }));
   const orderUsageRows = store.orders
     .filter((order) => !order.voided)
@@ -555,6 +556,14 @@ export function SalePurchaseTransactions({
     resetStockForm();
   };
 
+  const updatePurchaseUnitSize = async (id: string, value: string) => {
+    const purchaseUnitSize = value === "" ? undefined : Number(value);
+    if (purchaseUnitSize !== undefined && (!Number.isFinite(purchaseUnitSize) || purchaseUnitSize <= 0)) return;
+    const nextStocks = stocks.map((item) => item.id === id ? { ...item, purchaseUnitSize } : item);
+    setStocks(nextStocks);
+    await persistInventory(nextStocks);
+  };
+
   const handleEditStock = (s: StockItem) => {
     setEditStockId(s.id);
     setStockName(s.name);
@@ -795,12 +804,27 @@ export function SalePurchaseTransactions({
             onClick={() => setActiveTab(tab)}
             className={`shrink-0 px-4 py-1.5 rounded text-xs font-bold transition shadow-sm uppercase ${activeTab === tab ? "bg-black text-white" : "bg-white text-neutral-700 hover:bg-neutral-100"}`}
           >
-            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : tab === "used" ? "Usage Logbook" : "Costing"}
+            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : tab === "used" ? "Usage Logbook" : tab === "units" ? "Unit Setup" : "Costing"}
           </button>
         ))}
       </div> : null}
 
       {dateRangeFilter}
+
+      {activeTab === "units" && (
+        <section className="space-y-4">
+          <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4">
+            <h2 className="text-sm font-bold uppercase text-neutral-800">Unit Setup</h2>
+            <p className="mt-1 text-xs text-neutral-600">Set how much one purchased unit contains and how much one cup uses. New stock items appear here automatically.</p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-neutral-300">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Item</th><th className="p-3">Total Unit Item</th><th className="p-3">Unit Item</th><th className="p-3">Cups make</th></tr></thead>
+              <tbody>{stocks.map((item) => <tr key={item.id} className="border-b border-neutral-200 last:border-0"><td className="p-3 font-medium">{item.name}</td><td className="p-3"><input type="number" min="0" step="any" value={item.purchaseUnitSize ?? ""} onChange={(event) => { const value = event.target.value; setStocks((current) => current.map((row) => row.id === item.id ? { ...row, purchaseUnitSize: value === "" ? undefined : Number(value) } : row)); }} onBlur={(event) => void updatePurchaseUnitSize(item.id, event.target.value)} placeholder="e.g. 1000" className="w-full rounded border border-neutral-300 px-3 py-2" /></td><td className="p-3 text-neutral-600">{item.unit}</td><td className="p-3"><input type="number" min="0" step="any" value={(() => { const costingIngredient = (store.recipeCostings ?? []).flatMap((costing) => costing.ingredients).find((ingredient) => namesMatch(ingredient.name, item.name)); const amount = Number(costingIngredient?.amount) || 0; return item.purchaseUnitSize && amount > 0 ? (item.purchaseUnitSize / amount).toFixed(2) : ""; })()} readOnly placeholder="Set costing amount" className="w-full rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-neutral-600" /></td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {activeTab === "recipes" && (
         <div className="space-y-6">
@@ -907,11 +931,6 @@ export function SalePurchaseTransactions({
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Unit</label>
                 <input type="text" placeholder="grams, ml, pcs" value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">1 purchase unit equals</label>
-                <input type="number" min="0" step="any" placeholder="e.g. 1000" value={stockPurchaseUnitSize} onChange={(e) => setStockPurchaseUnitSize(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-                <p className="mt-1 text-[10px] text-neutral-500">Optional conversion to the stock unit</p>
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="flex-1 bg-black text-white px-4 py-1.5 rounded text-sm font-medium">{editStockId ? "Update" : "Add"}</button>
