@@ -263,7 +263,8 @@ export function ingredientsForOrderLine(store: StoreData, line: OrderItem): Reci
   const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some((drink) => matchesDrink(drink) || normalizeDrink(drink).includes(normalizeDrink(names[0])) || normalizeDrink(names[0]).includes(normalizeDrink(drink))))?.ingredients;
 
   // Inventory is deducted only from ingredients explicitly configured for the drink.
-  const recipe = savedRecipe ?? costingRecipe ?? [];
+  // Costings are the source of truth. Prefer the current costing over legacy recipe entries.
+  const recipe = costingRecipe ?? savedRecipe ?? [];
   return recipe.filter((ingredient) => Number(ingredient.amount) > 0);
 
   return [];
