@@ -359,14 +359,23 @@ export function SalePurchaseTransactions({
   const configuredIngredients = savedCostings.flatMap((costing) => costing.ingredients).filter((ingredient) => ingredient.name.trim());
   const nextStocks = [...stocks];
   for (const ingredient of configuredIngredients) {
-    const exists = nextStocks.some((item) => namesMatch(item.name, ingredient.name));
-    if (!exists) {
+    const existingIndex = nextStocks.findIndex((item) => namesMatch(item.name, ingredient.name));
+    const amountPerCup = Number(ingredient.amount);
+    const unit = ingredient.unit?.trim() || "pcs";
+    if (existingIndex >= 0) {
+      nextStocks[existingIndex] = {
+        ...nextStocks[existingIndex],
+        unit,
+        cupUsageAmount: Number.isFinite(amountPerCup) && amountPerCup > 0 ? amountPerCup : nextStocks[existingIndex].cupUsageAmount,
+      };
+    } else {
       nextStocks.push({
         id: `stock-${Date.now()}-${nextStocks.length}`,
         name: ingredient.name.trim(),
         category: "",
         stock: 0,
-        unit: ingredient.unit || "pcs",
+        unit,
+        cupUsageAmount: Number.isFinite(amountPerCup) && amountPerCup > 0 ? amountPerCup : undefined,
       });
     }
   }
