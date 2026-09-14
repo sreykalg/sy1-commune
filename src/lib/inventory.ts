@@ -255,14 +255,12 @@ function cupForDrink(
 
 export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
   const menuItem = store.menu.find((item) => item.id === line.productId);
-  const name = menuItem?.name || line.name;
-  const normalizedName = name.trim().toLowerCase().replace(/\s+[·-]\s+(hot|iced)$/i, "");
-  const matchesDrink = (drink: string) => {
-    const normalizedDrink = drink.trim().toLowerCase();
-    return normalizedDrink === name.trim().toLowerCase() || normalizedDrink.replace(/\s+[·-]\s+(hot|iced)$/i, "") === normalizedName || drink === line.productId;
-  };
+  const names = [line.name, menuItem?.name].filter((value): value is string => Boolean(value));
+  const normalizeDrink = (value: string) => value.trim().toLowerCase().replace(/[·–—-]\s*(hot|iced)\s*$/i, "").replace(/\s+/g, " ");
+  const normalizedNames = new Set(names.map(normalizeDrink));
+  const matchesDrink = (drink: string) => drink === line.productId || normalizedNames.has(normalizeDrink(drink));
   const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
-  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some(matchesDrink))?.ingredients;
+  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some((drink) => matchesDrink(drink) || normalizeDrink(drink).includes(normalizeDrink(names[0])) || normalizeDrink(names[0]).includes(normalizeDrink(drink))))?.ingredients;
 
   // Inventory is deducted only from ingredients explicitly configured for the drink.
   const recipe = savedRecipe ?? costingRecipe ?? [];
