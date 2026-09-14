@@ -986,12 +986,18 @@ export function SalePurchaseTransactions({
 
       {activeTab === "stock" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {(["Daba Cup", "Peta Cup", "Hot Cup"] as const).map((cupName) => {
-              const cupItem = stocks.find((item) => item.name.trim().toLowerCase() === cupName.toLowerCase());
-              const cupRemaining = cupItem ? stockLedgerForRange({ itemName: cupItem.name, liveStock: cupItem.stock, from: rangeStart, to: rangeEnd, restocks, usages }).remaining : 0;
-              return <div key={cupName} className="rounded-lg border border-neutral-300 bg-neutral-50 px-4 py-3"><div className="text-xs font-medium text-neutral-500">{cupName}</div><div className="mt-1 text-xl font-semibold text-neutral-900">{(cupItem ? toPieceQuantity(cupItem, cupRemaining) : 0).toFixed(2)} pcs</div></div>;
-            })}
+          <div className="rounded-lg border border-neutral-300 bg-neutral-50 px-4 py-3">
+            <div className="text-xs font-medium text-neutral-500">Total Cups Used</div>
+            <div className="mt-1 text-xl font-semibold text-neutral-900">
+              {(["Daba Cup", "Peta Cup", "Hot Cup"] as const)
+                .reduce((total, cupName) => {
+                  const cupItem = stocks.find((item) => item.name.trim().toLowerCase() === cupName.toLowerCase());
+                  if (!cupItem) return total;
+                  const ledger = stockLedgerForRange({ itemName: cupItem.name, liveStock: cupItem.stock, from: rangeStart, to: rangeEnd, restocks, usages });
+                  return total + Number(ledger.used || 0);
+                }, 0)
+                .toFixed(2)} cups
+            </div>
           </div>
           {stockNotice ? <p className="text-sm text-red-600">{stockNotice}</p> : null}
           <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
