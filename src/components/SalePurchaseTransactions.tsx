@@ -216,6 +216,7 @@ export function SalePurchaseTransactions({
     unit: item.unit || "pcs",
     purchaseUnitSize: item.purchaseUnitSize,
     cupUsageAmount: item.cupUsageAmount,
+    cupsMake: item.cupsMake,
   }));
   const orderUsageRows = store.orders
     .filter((order) => !order.voided)
@@ -537,9 +538,10 @@ export function SalePurchaseTransactions({
         cost: existing?.cost ?? 0,
       maxStock: existing?.maxStock ?? item.stock,
       purchaseUnitSize: item.purchaseUnitSize,
-      cupUsageAmount: item.cupUsageAmount,
-    };
-    });
+    cupUsageAmount: item.cupUsageAmount,
+    cupsMake: item.cupsMake ?? existing?.cupsMake,
+  };
+  });
     await saveAdminData({ inventory });
   }
 
