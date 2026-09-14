@@ -159,6 +159,8 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   const [activeFilterMode, setActiveFilterMode] = useState<"range" | "date">("range");
   const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
   const [approvalPending, startApprovalTransition] = useTransition();
+  const [drinksOpen, setDrinksOpen] = useState(true);
+  const [ordersOpen, setOrdersOpen] = useState(true);
 
   const [expenses, setExpenses] = useState<CustomEntry[]>([]);
   const [credits, setCredits] = useState<CustomEntry[]>([]);
@@ -952,58 +954,81 @@ export function AdminDashboard({ store }: { store: StoreData }) {
       </section>
 
       <section className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
-        <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
-          Drinks sold
-        </h2>
-        <p className="mt-1 text-[11px] text-neutral-400">Breakdown for the selected range</p>
-        {drinkSoldRows.length === 0 ? (
-          <p className="mt-4 py-6 text-center text-sm text-neutral-500">
-            No drinks sold in this range.
-          </p>
-        ) : (
-          <div className="mt-4">
-            <div className="hidden grid-cols-5 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 sm:grid">
-              <p className="min-w-0">Drink</p>
-              <p className="min-w-0 text-right">Iced</p>
-              <p className="min-w-0 text-right">Hot</p>
-              <p className="min-w-0 text-right">Sold</p>
-              <p className="min-w-0 text-right">Sales</p>
-            </div>
-            <div className="divide-y divide-neutral-200">
-              {drinkSoldRows.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-5 sm:items-start sm:gap-x-4"
-                >
-                  <p className="min-w-0 text-sm font-medium">{item.name}</p>
-                  <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
-                    <span className="sm:hidden">Iced: </span>
-                    {item.iced}
-                  </p>
-                  <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
-                    <span className="sm:hidden">Hot: </span>
-                    {item.hot}
-                  </p>
-                  <p className="min-w-0 text-sm text-neutral-700 sm:text-right">{item.qty}</p>
-                  <p className="min-w-0 text-sm font-semibold sm:text-right">
-                    {formatMoney(item.sales)}
-                  </p>
+        <div className="flex items-center gap-3">
+          <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
+            Drinks sold
+          </h2>
+          <button
+            type="button"
+            onClick={() => setDrinksOpen((open) => !open)}
+            className="rounded border border-neutral-300 px-2 py-1 text-[10px] font-medium tracking-wide text-neutral-600 uppercase transition hover:border-black hover:text-black"
+          >
+            {drinksOpen ? "Minimize" : "Expand"}
+          </button>
+        </div>
+        {drinksOpen ? (
+          <>
+            <p className="mt-1 text-[11px] text-neutral-400">Breakdown for the selected range</p>
+            {drinkSoldRows.length === 0 ? (
+              <p className="mt-4 py-6 text-center text-sm text-neutral-500">
+                No drinks sold in this range.
+              </p>
+            ) : (
+              <div className="mt-4">
+                <div className="hidden grid-cols-5 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 sm:grid">
+                  <p className="min-w-0">Drink</p>
+                  <p className="min-w-0 text-right">Iced</p>
+                  <p className="min-w-0 text-right">Hot</p>
+                  <p className="min-w-0 text-right">Sold</p>
+                  <p className="min-w-0 text-right">Sales</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+                <div className="divide-y divide-neutral-200">
+                  {drinkSoldRows.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-5 sm:items-start sm:gap-x-4"
+                    >
+                      <p className="min-w-0 text-sm font-medium">{item.name}</p>
+                      <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
+                        <span className="sm:hidden">Iced: </span>
+                        {item.iced}
+                      </p>
+                      <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
+                        <span className="sm:hidden">Hot: </span>
+                        {item.hot}
+                      </p>
+                      <p className="min-w-0 text-sm text-neutral-700 sm:text-right">{item.qty}</p>
+                      <p className="min-w-0 text-sm font-semibold sm:text-right">
+                        {formatMoney(item.sales)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
       </section>
 
       <section className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
-        <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
-          Recent orders
-        </h2>
-        {latest.length === 0 ? (
-          <p className="mt-4 py-6 text-center text-sm text-neutral-500">
-            No recent orders found for the selected range.
-          </p>
-        ) : (
+        <div className="flex items-center gap-3">
+          <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
+            Recent orders
+          </h2>
+          <button
+            type="button"
+            onClick={() => setOrdersOpen((open) => !open)}
+            className="rounded border border-neutral-300 px-2 py-1 text-[10px] font-medium tracking-wide text-neutral-600 uppercase transition hover:border-black hover:text-black"
+          >
+            {ordersOpen ? "Minimize" : "Expand"}
+          </button>
+        </div>
+        {ordersOpen ? (
+          latest.length === 0 ? (
+            <p className="mt-4 py-6 text-center text-sm text-neutral-500">
+              No recent orders found for the selected range.
+            </p>
+          ) : (
           <div className="mt-4">
             <div className="hidden grid-cols-8 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
               <p className="min-w-0">Time</p>
@@ -1077,7 +1102,8 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               ))}
             </div>
           </div>
-        )}
+          )
+        ) : null}
       </section>
     </div>
   );
