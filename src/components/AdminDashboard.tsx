@@ -17,11 +17,9 @@ import {
   ordersOnDay,
   paymentStats,
   productStats,
-  promoStats,
   salesByHour,
   salesByYearMonths,
   sumSales,
-  totalDiscount,
   unitsSold,
 } from "@/lib/analytics";
 import type { Order, StoreData } from "@/lib/types";
@@ -347,7 +345,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   );
 
   const busy = busiestDay(week);
-  const promos = promoStats(filteredOrdersList);
   
   const payments = paymentStats(filteredOrdersList);
   const totalSalesAmount = sumSales(filteredOrdersList);
@@ -363,7 +360,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   const netProfitOrLoss = totalSalesAmount - (totalExpensesAmount + totalCreditsAmount);
 
   const drinks = unitsSold(productStatsList);
-  const discounts = totalDiscount(filteredOrdersList);
   
   const computedAverageTicket = filteredOrdersList.length > 0 
     ? totalSalesAmount / filteredOrdersList.length 
@@ -724,7 +720,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section className="grid gap-6 lg:grid-cols-2">
         <div className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
           <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
             Sales by category (by item quantity)
@@ -764,30 +760,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               <span>{formatMoney(totalSalesAmount)}</span>
             </div>
           </div>
-        </div>
-
-        <div className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
-          <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
-            Promotions
-          </h2>
-          <p className="mt-1 text-[11px] text-neutral-400">Selected Range</p>
-          {promos.length === 0 ? (
-            <div className="mt-6 space-y-2 text-sm text-neutral-500">
-              <p>No discounts on tickets in this period.</p>
-              <p>Discounts {formatMoney(discounts)}</p>
-            </div>
-          ) : (
-            <HorizontalBars
-              empty="No promotions used."
-              items={promos.map((item) => ({
-                key: item.label,
-                label: item.label,
-                value: item.count,
-                left: `${item.count} tickets`,
-                right: formatMoney(item.discount),
-              }))}
-            />
-          )}
         </div>
       </section>
 
@@ -971,19 +943,22 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           </p>
         ) : (
           <div className="mt-4">
-            <div className="hidden grid-cols-[5.5rem_7rem_6rem_minmax(0,1fr)_auto_auto] gap-x-3 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
-              <p>Order ID</p>
-              <p>Time</p>
-              <p>Cashier</p>
-              <p>Items</p>
-              <p>Status</p>
-              <p className="text-right">Total</p>
+            <div className="hidden grid-cols-9 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
+              <p className="min-w-0">Order ID</p>
+              <p className="min-w-0">Time</p>
+              <p className="min-w-0">Cashier</p>
+              <p className="min-w-0">Items</p>
+              <p className="min-w-0">Status</p>
+              <p className="min-w-0">Reason</p>
+              <p className="min-w-0">Promo</p>
+              <p className="min-w-0">Pay</p>
+              <p className="min-w-0 text-right">Total</p>
             </div>
             <div className="divide-y divide-neutral-200">
               {latest.map((order: Order, ordIdx: number) => (
                 <div
                   key={`${order.id}-${ordIdx}`}
-                  className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-[5.5rem_7rem_6rem_minmax(0,1fr)_auto_auto] lg:items-start lg:gap-x-3"
+                  className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-9 lg:items-start lg:gap-x-4"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{orderIdLabel(order)}</p>
@@ -1000,7 +975,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                       {order.baristaName}
                     </p>
                   </div>
-                  <p className="hidden text-sm leading-5 text-neutral-700 lg:block">
+                  <p className="hidden min-w-0 text-sm leading-5 text-neutral-700 lg:block">
                     {new Date(order.createdAt).toLocaleString("en-US", {
                       timeZone: "Asia/Manila",
                       month: "short",
@@ -1013,23 +988,14 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                   <p className="hidden min-w-0 break-words text-sm text-neutral-700 lg:block">
                     {order.baristaName}
                   </p>
+                  <p className="min-w-0 text-xs leading-relaxed break-words text-neutral-600 lg:text-sm">
+                    {order.items
+                      .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
+                      .join(", ")}
+                  </p>
                   <div className="min-w-0">
-                    <p className="text-xs leading-relaxed break-words text-neutral-600 lg:text-sm">
-                      {order.items
-                        .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
-                        .join(", ")}
-                    </p>
-                    <p className="mt-1 text-[11px] text-neutral-500">
-                      {paymentLabel(order.paymentMethod)}
-                      {order.promoLabel ? ` · ${order.promoLabel}` : ""}
-                      {isVoided(order)
-                        ? ` · ${order.voidReason?.trim() || "Void"}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 lg:contents">
                     <span
-                      className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[10px] font-medium lg:mt-0.5 lg:text-xs ${
+                      className={`inline-flex rounded px-2 py-0.5 text-[10px] font-medium lg:text-xs ${
                         isVoided(order)
                           ? "bg-red-100 text-red-700"
                           : "bg-black text-white"
@@ -1037,10 +1003,23 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                     >
                       {isVoided(order) ? "Void" : "Completed"}
                     </span>
-                    <p className="shrink-0 text-sm font-semibold lg:text-right">
-                      {formatMoney(order.total)}
-                    </p>
                   </div>
+                  <p className="min-w-0 break-words text-xs text-neutral-500 lg:text-sm">
+                    <span className="lg:hidden">Reason: </span>
+                    {isVoided(order) ? order.voidReason?.trim() || "—" : "—"}
+                  </p>
+                  <p className="min-w-0 break-words text-xs text-neutral-500 lg:text-sm">
+                    <span className="lg:hidden">Promo: </span>
+                    {order.promoLabel ?? "—"}
+                  </p>
+                  <p className="min-w-0 text-xs text-neutral-500 lg:text-sm">
+                    <span className="lg:hidden">Pay: </span>
+                    {paymentLabel(order.paymentMethod)}
+                  </p>
+                  <p className="min-w-0 text-sm font-semibold lg:text-right">
+                    <span className="font-normal text-neutral-500 lg:hidden">Total: </span>
+                    {formatMoney(order.total)}
+                  </p>
                 </div>
               ))}
             </div>
