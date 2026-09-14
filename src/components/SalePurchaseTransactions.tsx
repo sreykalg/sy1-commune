@@ -1049,7 +1049,11 @@ export function SalePurchaseTransactions({
                   });
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
-                  const cupsLeft = recipe ? cupsFromQuantity(remaining, recipe) : null;
+                  const cupsLeft = recipe
+    ? cupsFromQuantity(remaining, recipe)
+    : s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null
+      ? Number(s.cupsMake)
+      : null;
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
