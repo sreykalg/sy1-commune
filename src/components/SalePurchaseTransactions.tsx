@@ -638,7 +638,7 @@ export function SalePurchaseTransactions({
   const handleEditStock = (s: StockItem) => {
     setEditStockId(s.id);
     setStockName(s.name);
-    setStockQty(toPieceQuantity(s, s.stock).toString());
+    setStockQty(toPieceQuantity(s, s.openingStock ?? s.stock).toString());
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
     setStockCupUsageAmount(s.cupUsageAmount?.toString() ?? "");
