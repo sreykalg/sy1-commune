@@ -275,42 +275,41 @@ export function SalePurchaseTransactions({
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const recipeMenu = store.menu ?? [];
   const recipeMap = store.recipes ?? {};
-  type IngredientAssignment = { name: string; inventoryItemId: string; amount: number; unit: string; drinks: string[] };
-  const [ingredientAssignments, setIngredientAssignments] = useState<IngredientAssignment[]>([]);
+  type Costing = { name: string; drinks: string[]; ingredients: RecipeIngredient[] };
+  const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
 
   useEffect(() => {
-    const grouped = new Map<string, IngredientAssignment>();
-    Object.entries(recipeMap).forEach(([drink, ingredients]) => {
-      ingredients.forEach((ingredient) => {
-        const key = ingredient.inventoryItemId || ingredient.name.trim().toLowerCase();
-        const existing = grouped.get(key);
-        if (existing) existing.drinks.push(drink);
-        else grouped.set(key, { ...ingredient, drinks: [drink] });
-      });
-    });
-    setIngredientAssignments(Array.from(grouped.values()));
+    setRecipeCostings(Object.entries(recipeMap).map(([drink, ingredients]) => ({
+      name: `${drink} Costing`,
+      drinks: [drink],
+      ingredients,
+    })));
   }, [recipeMap]);
 
-  function updateIngredientAssignment(index: number, patch: Partial<IngredientAssignment>) {
-    setIngredientAssignments((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+  function updateCosting(index: number, patch: Partial<Costing>) {
+    setRecipeCostings((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   }
 
-  function toggleAssignment(index: number, drink: string) {
-    setIngredientAssignments((rows) => rows.map((row, rowIndex) => {
+  function updateCostingIngredient(costingIndex: number, ingredientIndex: number, patch: Partial<RecipeIngredient>) {
+    setRecipeCostings((rows) => rows.map((row, rowIndex) => rowIndex === costingIndex ? {
+      ...row,
+      ingredients: row.ingredients.map((ingredient, currentIndex) => currentIndex === ingredientIndex ? { ...ingredient, ...patch } : ingredient),
+    } : row));
+  }
+
+  function toggleCostingDrink(index: number, drink: string) {
+    setRecipeCostings((rows) => rows.map((row, rowIndex) => {
       if (rowIndex !== index) return row;
       const drinks = row.drinks.includes(drink) ? row.drinks.filter((name) => name !== drink) : [...row.drinks, drink];
       return { ...row, drinks };
     }));
   }
 
-  async function saveIngredientAssignments() {
+  async function saveCostings() {
     const recipes: StoreData["recipes"] = {};
-    ingredientAssignments.forEach((ingredient) => {
-      ingredient.drinks.forEach((drink) => {
-        recipes[drink] ??= [];
-        recipes[drink].push({ inventoryItemId: ingredient.inventoryItemId, name: ingredient.name.trim(), amount: ingredient.amount, unit: ingredient.unit.trim() });
-      });
-    });
+    recipeCostings.forEach((costing) => costing.drinks.forEach((drink) => {
+      recipes[drink] = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
+    }));
     await saveAdminData({ recipes });
   }
 
@@ -756,31 +755,17 @@ export function SalePurchaseTransactions({
 
       {activeTab === "recipes" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4">
-            <div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients per Drink</h3><p className="mt-1 text-xs text-neutral-500">Create one costing, then assign its drink coverage.</p></div>
-            <button type="button" onClick={() => setIngredientAssignments((rows) => [...rows, { inventoryItemId: "", name: "", amount: 0, unit: "ml", drinks: [] }])} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Ingredient</button>
-          </div>
-
-          {ingredientAssignments.map((row, index) => {
-            const assignedElsewhere = new Set(ingredientAssignments.flatMap((other, otherIndex) => otherIndex === index ? [] : other.drinks));
-            return <section key={index} className="overflow-hidden rounded-lg border border-neutral-400 bg-white">
-              <div className="border-b border-neutral-300 bg-neutral-50 px-4 py-3"><h3 className="text-lg font-medium text-neutral-900">{row.name || "New Ingredient"} Costing</h3></div>
-              <div className="border-b border-neutral-300 px-4 py-3">
-                <div className="mb-2 text-[11px] font-bold uppercase text-neutral-700">Add drinks</div>
-                <div className="grid max-h-32 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 bg-white p-2 sm:grid-cols-3">
-                  {recipeMenu.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={row.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !row.drinks.includes(drink.name)} onChange={() => toggleAssignment(index, drink.name)} />{drink.name}</label>)}
-                </div>
-              </div>
-              <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead><tbody><tr>
-                <td className="p-2 space-y-2"><select value={row.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateIngredientAssignment(index, { inventoryItemId: event.target.value, name: item?.name ?? row.name, unit: item?.unit ?? row.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{row.inventoryItemId === "other" && <input value={row.name} onChange={(event) => updateIngredientAssignment(index, { name: event.target.value })} placeholder="Type ingredient name" className="w-full rounded border border-neutral-300 px-2 py-1.5" />}</td>
-                <td className="p-2"><input type="number" min="0" step="0.01" value={row.amount === 0 ? "" : row.amount} onChange={(event) => updateIngredientAssignment(index, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
-                <td className="p-2"><input value={row.unit} onChange={(event) => updateIngredientAssignment(index, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td>
-                <td className="p-2 text-center"><button type="button" onClick={() => setIngredientAssignments((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="text-xs font-medium text-red-600">Remove</button></td>
-              </tr></tbody></table></div>
+          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4"><div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients per Drink</h3><p className="mt-1 text-xs text-neutral-500">One costing contains all of its ingredients.</p></div><button type="button" onClick={() => setRecipeCostings((rows) => [...rows, { name: "", drinks: [], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] }])} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Costing</button></div>
+          {recipeCostings.map((costing, costingIndex) => {
+            const assignedElsewhere = new Set(recipeCostings.flatMap((other, otherIndex) => otherIndex === costingIndex ? [] : other.drinks));
+            return <section key={costingIndex} className="overflow-hidden rounded-lg border border-neutral-400 bg-white">
+              <div className="border-b border-neutral-300 bg-neutral-50 px-4 py-3"><input value={costing.name} onChange={(event) => updateCosting(costingIndex, { name: event.target.value })} placeholder="Costing name, e.g. Mouna" className="w-full max-w-sm bg-transparent text-lg font-medium outline-none" /></div>
+              <div className="border-b border-neutral-300 px-4 py-3"><div className="mb-2 text-[11px] font-bold uppercase text-neutral-700">Add drinks</div><div className="grid max-h-32 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 p-2 sm:grid-cols-3">{recipeMenu.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !costing.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={costing.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !costing.drinks.includes(drink.name)} onChange={() => toggleCostingDrink(costingIndex, drink.name)} />{drink.name}</label>)}</div></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead><tbody>{costing.ingredients.map((ingredient, ingredientIndex) => <tr key={ingredientIndex} className="border-b border-neutral-200"><td className="p-2"><select value={ingredient.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateCostingIngredient(costingIndex, ingredientIndex, { inventoryItemId: event.target.value, name: item?.name ?? ingredient.name, unit: item?.unit ?? ingredient.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{ingredient.inventoryItemId === "other" && <input value={ingredient.name} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { name: event.target.value })} placeholder="Type ingredient name" className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5" />}</td><td className="p-2"><input type="number" min="0" step="0.01" value={ingredient.amount === 0 ? "" : ingredient.amount} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td><td className="p-2"><input value={ingredient.unit} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td><td className="p-2 text-center"><button type="button" onClick={() => updateCosting(costingIndex, { ingredients: costing.ingredients.filter((_, rowIndex) => rowIndex !== ingredientIndex) })} className="text-xs font-medium text-red-600">Remove</button></td></tr>)}</tbody></table></div>
+              <div className="flex justify-between p-3"><button type="button" onClick={() => updateCosting(costingIndex, { ingredients: [...costing.ingredients, { inventoryItemId: "", name: "", amount: 0, unit: "ml" }] })} className="text-xs font-medium text-neutral-700">+ Add ingredient</button><button type="button" onClick={() => setCostings((rows) => rows.filter((_, rowIndex) => rowIndex !== costingIndex))} className="text-xs font-medium text-red-600">Remove costing</button></div>
             </section>;
           })}
-          {ingredientAssignments.length === 0 && <div className="rounded-lg border border-neutral-400 bg-white p-8 text-center text-sm text-neutral-500">No ingredients added.</div>}
-          <div className="flex justify-end"><button type="button" onClick={() => void saveIngredientAssignments()} className="rounded bg-black px-5 py-2 text-sm font-medium text-white">Save Ingredients</button></div>
+          {recipeCostings.length === 0 && <div className="rounded-lg border border-neutral-400 bg-white p-8 text-center text-sm text-neutral-500">No costings added.</div>}<div className="flex justify-end"><button type="button" onClick={() => void saveCostings()} className="rounded bg-black px-5 py-2 text-sm font-medium text-white">Save Costings</button></div>
         </div>
       )}
 
