@@ -567,7 +567,7 @@ export function SalePurchaseTransactions({
     const unit = stockUnit.trim() || "pcs";
     const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
     const cupUsageAmount = stockCupUsageAmount.trim() ? Number(stockCupUsageAmount) : undefined;
-    const cupsMake = purchaseUnitSize !== undefined && cupUsageAmount !== undefined
+    const cupsMake = unit && purchaseUnitSize !== undefined && cupUsageAmount !== undefined
       ? purchaseUnitSize / cupUsageAmount
       : undefined;
     if ([purchaseUnitSize, cupUsageAmount].some((value) => value !== undefined && (!Number.isFinite(value) || value <= 0))) return;
@@ -1007,7 +1007,7 @@ export function SalePurchaseTransactions({
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Cups make</label>
                 <div className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700">
-                  {Number(stockPurchaseUnitSize) > 0 && Number(stockCupUsageAmount) > 0 ? (Number(stockPurchaseUnitSize) / Number(stockCupUsageAmount)).toFixed(2) : "—"}
+                  {stockUnit.trim() && Number(stockPurchaseUnitSize) > 0 && Number(stockCupUsageAmount) > 0 ? (Number(stockPurchaseUnitSize) / Number(stockCupUsageAmount)).toFixed(2) : "—"}
                 </div>
               </div>
               <div className="flex gap-2">
