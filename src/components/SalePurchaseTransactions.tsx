@@ -4,18 +4,15 @@ import { costingIngredientForItem, cupsFromQuantity, formatQty, namesMatch, perC
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import type { Order, StoreData } from "@/lib/types";
 
-function inventoryUsageMetrics(itemName: string, unit: string) {
+function inventoryUsagePerPiece(itemName: string, used: number) {
   const normalized = itemName.trim().toLowerCase();
-  if (normalized.includes("coffee bean")) {
-    return { perUnit: `1,000 ${unit}`, perPiece: `9 ${unit}` };
-  }
-  if (normalized.includes("milk")) {
-    return { perUnit: "893.33 mL", perPiece: "13.33 mL" };
-  }
-  if (normalized.includes("matcha")) {
-    return { perUnit: `150 ${unit}`, perPiece: `10 ${unit}` };
-  }
-  return { perUnit: "—", perPiece: "—" };
+  const unitSize = normalized.includes("milk") || normalized.includes("coffee bean")
+    ? 1000
+    : normalized.includes("matcha")
+      ? 150
+      : null;
+
+  return unitSize === null ? "—" : `${(used / unitSize).toFixed(2)} pc`;
 }
 
 export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used";
@@ -853,7 +850,7 @@ export function SalePurchaseTransactions({
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
-                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsageMetrics(s.name, s.unit).perPiece}</td>
+                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s.name, Number(used))}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
                         <input
                           aria-label={`Remaining stock for ${s.name}`}
