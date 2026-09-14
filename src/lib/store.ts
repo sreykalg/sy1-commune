@@ -312,6 +312,12 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.usageLogs)) {
     store.usageLogs = [];
+  } else {
+    store.usageLogs = store.usageLogs.map((usage) =>
+      /milk/i.test(usage.itemName) && Number(usage.usedAmount) >= 100
+        ? { ...usage, usedAmount: Number((Number(usage.usedAmount) / 10).toFixed(2)), unit: "ml" }
+        : usage,
+    );
   }
   if (!Array.isArray(store.restocks)) {
     store.restocks = [];
@@ -451,6 +457,7 @@ async function readStore(): Promise<StoreData> {
   const store = normalizeStore(original);
   const originalCostings = Array.isArray(original.costings) ? original.costings : [];
   const originalRecipes = original.recipes && typeof original.recipes === "object" ? original.recipes : {};
+  const originalUsageLogs = Array.isArray(original.usageLogs) ? original.usageLogs : [];
   const originalInventory = Array.isArray(original.inventory) ? original.inventory : [];
   const originalUsers = Array.isArray(original.users) ? original.users : [];
   const originalMenu = Array.isArray(original.menu) ? original.menu : [];
@@ -463,6 +470,7 @@ async function readStore(): Promise<StoreData> {
   if (
     JSON.stringify(store.costings) !== JSON.stringify(originalCostings) ||
     JSON.stringify(store.recipes) !== JSON.stringify(originalRecipes) ||
+    JSON.stringify(store.usageLogs) !== JSON.stringify(originalUsageLogs) ||
     store.inventory.length !== originalInventory.length ||
     store.inventory.some((item) => originalInventory.find((row) => row.id === item.id)?.name !== item.name) ||
     store.users.length !== originalUsers.length ||
