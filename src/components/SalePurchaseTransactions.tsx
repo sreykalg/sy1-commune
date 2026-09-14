@@ -258,7 +258,6 @@ export function SalePurchaseTransactions({
 
   const [editStockId, setEditStockId] = useState<string | null>(null);
   const [stockName, setStockName] = useState("");
-  const [stockCategory, setStockCategory] = useState("");
   const [stockQty, setStockQty] = useState("");
   const [stockUnit, setStockUnit] = useState("grams");
   const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
@@ -267,8 +266,7 @@ export function SalePurchaseTransactions({
   function resetStockForm() {
     setEditStockId(null);
     setStockName("");
-    setStockCategory("");
-    setStockQty("");
+      setStockQty("");
     setStockUnit("grams");
     setStockPurchaseUnitSize("");
     setStockCupUsageAmount("");
@@ -524,7 +522,7 @@ export function SalePurchaseTransactions({
 
   const handleSaveStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stockName || !stockCategory || !stockQty) return;
+    if (!stockName.trim() || !stockQty) return;
     const qty = Number(stockQty);
     if (!Number.isFinite(qty) || qty < 0) return;
     const unit = stockUnit.trim() || "pcs";
@@ -534,7 +532,7 @@ export function SalePurchaseTransactions({
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName, category: stockCategory, stock: qty, unit, purchaseUnitSize, cupUsageAmount } : s,
+        s.id === editStockId ? { ...s, name: stockName.trim(), stock: qty, unit, purchaseUnitSize, cupUsageAmount } : s,
       );
       setStocks(nextStocks);
       await persistInventory(nextStocks);
@@ -542,8 +540,8 @@ export function SalePurchaseTransactions({
     } else {
       const newItem: StockItem = {
         id: `stock-${Date.now()}`,
-        name: stockName,
-        category: stockCategory,
+        name: stockName.trim(),
+        category: "",
         stock: qty,
         unit,
         purchaseUnitSize,
@@ -597,7 +595,6 @@ export function SalePurchaseTransactions({
   const handleEditStock = (s: StockItem) => {
     setEditStockId(s.id);
     setStockName(s.name);
-    setStockCategory(s.category);
     setStockQty(s.stock.toString());
     setStockUnit(s.unit || "pcs");
     setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
@@ -946,14 +943,10 @@ export function SalePurchaseTransactions({
           {stockNotice ? <p className="text-sm text-red-600">{stockNotice}</p> : null}
           <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
             <h3 className="text-xs font-bold text-neutral-700 uppercase">{editStockId ? "Edit Stock Item" : "Add Stock Item"}</h3>
-            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-4 items-end">
+            <form onSubmit={handleSaveStock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Item Name</label>
                 <input type="text" placeholder="e.g. Coffee Beans" value={stockName} onChange={(e) => setStockName(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Category</label>
-                <input type="text" placeholder="e.g. Ingredients" value={stockCategory} onChange={(e) => setStockCategory(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Total Unit Item</label>
