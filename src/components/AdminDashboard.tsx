@@ -17,6 +17,7 @@ import {
   ordersOnDay,
   paymentStats,
   productStats,
+  drinkProductStats,
   salesByHour,
   salesByYearMonths,
   sumSales,
@@ -319,6 +320,23 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   const productStatsList = productStats(filteredOrdersList, store.menu);
   const best = bestSellers(productStatsList, 5);
   const low = lowSellers(productStatsList, 5);
+  const drinkStyles = new Map<string, { iced: number; hot: number }>();
+  for (const order of filteredOrdersList) {
+    for (const line of order.items) {
+      const current = drinkStyles.get(line.productId) ?? { iced: 0, hot: 0 };
+      if (line.style === "iced") current.iced += line.qty;
+      else if (line.style === "hot") current.hot += line.qty;
+      drinkStyles.set(line.productId, current);
+    }
+  }
+  const drinkSoldRows = drinkProductStats(productStatsList)
+    .filter((item) => item.qty > 0)
+    .map((item) => ({
+      ...item,
+      iced: drinkStyles.get(item.id)?.iced ?? 0,
+      hot: drinkStyles.get(item.id)?.hot ?? 0,
+    }))
+    .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
   
   const categories = categorySales(productStatsList).filter((item) => item.qty > 0);
   
@@ -931,6 +949,50 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             </table>
           </div>
         </div>
+      </section>
+
+      <section className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
+        <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
+          Drinks sold
+        </h2>
+        <p className="mt-1 text-[11px] text-neutral-400">Breakdown for the selected range</p>
+        {drinkSoldRows.length === 0 ? (
+          <p className="mt-4 py-6 text-center text-sm text-neutral-500">
+            No drinks sold in this range.
+          </p>
+        ) : (
+          <div className="mt-4">
+            <div className="hidden grid-cols-5 gap-x-4 border-b border-neutral-200 pb-2 text-xs text-neutral-500 sm:grid">
+              <p className="min-w-0">Drink</p>
+              <p className="min-w-0 text-right">Iced</p>
+              <p className="min-w-0 text-right">Hot</p>
+              <p className="min-w-0 text-right">Sold</p>
+              <p className="min-w-0 text-right">Sales</p>
+            </div>
+            <div className="divide-y divide-neutral-200">
+              {drinkSoldRows.map((item) => (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-5 sm:items-start sm:gap-x-4"
+                >
+                  <p className="min-w-0 text-sm font-medium">{item.name}</p>
+                  <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
+                    <span className="sm:hidden">Iced: </span>
+                    {item.iced}
+                  </p>
+                  <p className="min-w-0 text-sm text-neutral-600 sm:text-right">
+                    <span className="sm:hidden">Hot: </span>
+                    {item.hot}
+                  </p>
+                  <p className="min-w-0 text-sm text-neutral-700 sm:text-right">{item.qty}</p>
+                  <p className="min-w-0 text-sm font-semibold sm:text-right">
+                    {formatMoney(item.sales)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
