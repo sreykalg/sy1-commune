@@ -102,6 +102,7 @@ export type InventoryItem = {
   unit: string;
   cost: number;
   stock: number;
+  openingStock?: number;
   maxStock: number;
   purchaseUnitSize?: number;
   cupUsageAmount?: number;

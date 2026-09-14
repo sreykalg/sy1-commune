@@ -161,6 +161,7 @@ type StockItem = {
   name: string;
   category: string;
   stock: number;
+  openingStock?: number;
   unit: string;
   purchaseUnitSize?: number;
   cupUsageAmount?: number;
@@ -211,6 +212,7 @@ export function SalePurchaseTransactions({
     name: item.name,
     category: item.category,
     stock: item.stock,
+    openingStock: item.openingStock,
     unit: item.unit || "pcs",
     purchaseUnitSize: item.purchaseUnitSize,
     cupUsageAmount: item.cupUsageAmount,
@@ -574,7 +576,7 @@ export function SalePurchaseTransactions({
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName.trim(), stock: toBaseQuantity({ purchaseUnitSize }, pieces), unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
+        s.id === editStockId ? { ...s, name: stockName.trim(), stock: toBaseQuantity({ purchaseUnitSize }, pieces), openingStock: toBaseQuantity({ purchaseUnitSize }, pieces), unit, purchaseUnitSize, cupUsageAmount, cupsMake } : s,
       );
       const nextRestocks = restocks.filter((record) => !namesMatch(record.itemName, stockName));
       setStocks(nextStocks);
@@ -588,6 +590,7 @@ export function SalePurchaseTransactions({
         name: stockName.trim(),
         category: "",
         stock: toBaseQuantity({ purchaseUnitSize }, pieces),
+        openingStock: toBaseQuantity({ purchaseUnitSize }, pieces),
         unit,
         purchaseUnitSize,
         cupUsageAmount,
@@ -1049,7 +1052,7 @@ export function SalePurchaseTransactions({
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
-                      <td className="p-2 border-r border-neutral-200 text-right">{toPieceQuantity(s, opening).toFixed(2)} pcs</td>
+                      <td className="p-2 border-r border-neutral-200 text-right">{toPieceQuantity(s, s.openingStock ?? opening).toFixed(2)} pcs</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-semibold text-black">
                         {restocked > 0 ? `+${toPieceQuantity(s, restocked).toFixed(2)}` : "0.00"} pcs
                       </td>
