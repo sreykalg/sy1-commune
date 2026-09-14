@@ -183,7 +183,7 @@ type UsageRecord = {
 
 export function SalePurchaseTransactions({
   store,
-  tabs = ["transactions", "stock", "restock", "used", "recipes"],
+  tabs = ["transactions", "stock", "restock", "recipes", "used"],
   activeTab: controlledActiveTab,
   onTabChange,
   showTabs = true,
@@ -762,7 +762,7 @@ export function SalePurchaseTransactions({
             onClick={() => setActiveTab(tab)}
             className={`shrink-0 px-4 py-1.5 rounded text-xs font-bold transition shadow-sm uppercase ${activeTab === tab ? "bg-black text-white" : "bg-white text-neutral-700 hover:bg-neutral-100"}`}
           >
-            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : tab === "used" ? "Usage Logbook" : "Ingredients per Item"}
+            {tab === "transactions" ? "Transactions" : tab === "stock" ? "Stock Inventory" : tab === "restock" ? "Restock" : tab === "costing" ? "Costing" : tab === "used" ? "Usage Logbook" : "Costing"}
           </button>
         ))}
       </div> : null}
@@ -771,7 +771,7 @@ export function SalePurchaseTransactions({
 
       {activeTab === "recipes" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4"><div><h3 className="text-xs font-bold uppercase text-neutral-700">Ingredients per Item</h3><p className="mt-1 text-xs text-neutral-500">One costing contains all of its ingredients.</p></div><button type="button" onClick={() => { setRecipeCostings((rows) => { setExpandedCostings(new Set([rows.length])); return [...rows, { name: "", drinks: [], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] }]; }); }} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Costing</button></div>
+          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4"><div><h3 className="text-xs font-bold uppercase text-neutral-700">Costing</h3><p className="mt-1 text-xs text-neutral-500">One costing contains all of its ingredients.</p></div><button type="button" onClick={() => { setRecipeCostings((rows) => { setExpandedCostings(new Set([rows.length])); return [...rows, { name: "", drinks: [], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] }]; }); }} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Costing</button></div>
           {recipeCostings.map((costing, costingIndex) => {
             const assignedElsewhere = new Set(recipeCostings.flatMap((other, otherIndex) => otherIndex === costingIndex ? [] : other.drinks));
             const categories = Array.from(new Set(recipeMenu.map((drink) => drink.category).filter(Boolean)));
