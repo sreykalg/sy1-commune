@@ -764,7 +764,10 @@ export function PosClient({
           </button>
           <button
             type="button"
-            onClick={() => setActivePanel("pos")}
+            onClick={() => {
+              setActivePanel("pos");
+              setMenuOpen(false);
+            }}
             className="text-base font-bold tracking-tight lowercase"
           >
             commune.
@@ -818,6 +821,21 @@ export function PosClient({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <button
+              type="button"
+              aria-current={activePanel === "pos" ? "page" : undefined}
+              onClick={() => {
+                setActivePanel("pos");
+                setMenuOpen(false);
+              }}
+              className={`mb-3 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+                activePanel === "pos"
+                  ? "bg-black text-white"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
+              }`}
+            >
+              POS
+            </button>
             {!isManager ? (
               <div>
                 <p className="px-4 pb-1 text-[11px] font-medium tracking-wide text-neutral-400 uppercase">
