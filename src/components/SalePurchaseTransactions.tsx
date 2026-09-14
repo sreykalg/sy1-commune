@@ -4,6 +4,20 @@ import { costingIngredientForItem, cupsFromQuantity, formatQty, namesMatch, perC
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import type { Order, StoreData } from "@/lib/types";
 
+function inventoryUsageMetrics(itemName: string, unit: string) {
+  const normalized = itemName.trim().toLowerCase();
+  if (normalized.includes("coffee bean")) {
+    return { perUnit: `1,000 ${unit}`, perPiece: `9 ${unit}` };
+  }
+  if (normalized.includes("milk")) {
+    return { perUnit: `10,000 ${unit}`, perPiece: `133 ${unit}` };
+  }
+  if (normalized.includes("matcha")) {
+    return { perUnit: `150 ${unit}`, perPiece: `10 ${unit}` };
+  }
+  return { perUnit: "—", perPiece: "—" };
+}
+
 export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used";
 
 type InventoryStore = Pick<
@@ -800,6 +814,8 @@ export function SalePurchaseTransactions({
                   <th className="p-3 border-r border-white/15 text-right">Opening</th>
                   <th className="p-3 border-r border-white/15 text-right">Restock</th>
                   <th className="p-3 border-r border-white/15 text-right">Used</th>
+                  <th className="p-3 border-r border-white/15 text-right">Used per unit</th>
+                  <th className="p-3 border-r border-white/15 text-right">Used per pcs</th>
                   <th className="p-3 border-r border-white/15 text-right">Remaining</th>
                   <th className="p-3 border-r border-white/15 text-right">Cups left</th>
                   <th className="p-3 border-r border-white/15 text-center">Restock</th>
@@ -819,6 +835,7 @@ export function SalePurchaseTransactions({
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
                   const cupsLeft = recipe ? cupsFromQuantity(remaining, recipe) : null;
+                  const usageMetrics = inventoryUsageMetrics(s.name, s.unit);
 
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
@@ -839,6 +856,8 @@ export function SalePurchaseTransactions({
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
+                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{usageMetrics.perUnit}</td>
+                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{usageMetrics.perPiece}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
                         <input
                           aria-label={`Remaining stock for ${s.name}`}
