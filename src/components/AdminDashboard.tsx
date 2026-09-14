@@ -142,6 +142,10 @@ function isVoided(order: Order) {
   return Boolean(order.voided) || Boolean(order.voidReason?.trim());
 }
 
+function orderIdLabel(order: Order) {
+  return order.ticketNo != null ? `#${order.ticketNo}` : order.id;
+}
+
 function entryInPeriod(dateStr: string, start: Date, end: Date) {
   const dayStart = new Date(`${dateStr}T00:00:00+08:00`).getTime();
   const dayEnd = new Date(`${dateStr}T23:59:59.999+08:00`).getTime();
@@ -426,7 +430,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   }
 
   return (
-    <div className="space-y-6 px-3 py-5 sm:space-y-10 sm:px-6 sm:py-8">
+    <div className="min-w-0 max-w-full space-y-6 px-3 py-5 sm:space-y-10 sm:px-6 sm:py-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs tracking-[0.3em] text-neutral-500 uppercase">
@@ -961,20 +965,29 @@ export function AdminDashboard({ store }: { store: StoreData }) {
         <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
           Recent orders
         </h2>
-        <div className="mt-4 space-y-3 md:hidden">
-          {latest.length === 0 ? (
-            <p className="py-6 text-center text-sm text-neutral-500">
-              No recent orders found for the selected range.
-            </p>
-          ) : (
-            latest.map((order: Order, ordIdx: number) => (
-              <article
-                key={`${order.id}-${ordIdx}`}
-                className="rounded-xl border border-neutral-200 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
+        {latest.length === 0 ? (
+          <p className="mt-4 py-6 text-center text-sm text-neutral-500">
+            No recent orders found for the selected range.
+          </p>
+        ) : (
+          <div className="mt-4">
+            <div className="hidden grid-cols-[5.5rem_7rem_6rem_minmax(0,1fr)_auto_auto] gap-x-3 border-b border-neutral-200 pb-2 text-xs text-neutral-500 lg:grid">
+              <p>Order ID</p>
+              <p>Time</p>
+              <p>Cashier</p>
+              <p>Items</p>
+              <p>Status</p>
+              <p className="text-right">Total</p>
+            </div>
+            <div className="divide-y divide-neutral-200">
+              {latest.map((order: Order, ordIdx: number) => (
+                <div
+                  key={`${order.id}-${ordIdx}`}
+                  className="grid grid-cols-1 gap-2 py-3 lg:grid-cols-[5.5rem_7rem_6rem_minmax(0,1fr)_auto_auto] lg:items-start lg:gap-x-3"
+                >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-medium">{orderIdLabel(order)}</p>
+                    <p className="mt-0.5 text-xs text-neutral-500 lg:hidden">
                       {new Date(order.createdAt).toLocaleString("en-US", {
                         timeZone: "Asia/Manila",
                         month: "short",
@@ -983,13 +996,40 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                         minute: "2-digit",
                         hour12: true,
                       })}
+                      <span className="mx-1">·</span>
+                      {order.baristaName}
                     </p>
-                    <p className="mt-0.5 text-xs text-neutral-500">{order.baristaName}</p>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold">{formatMoney(order.total)}</p>
+                  <p className="hidden text-sm leading-5 text-neutral-700 lg:block">
+                    {new Date(order.createdAt).toLocaleString("en-US", {
+                      timeZone: "Asia/Manila",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
+                  </p>
+                  <p className="hidden min-w-0 break-words text-sm text-neutral-700 lg:block">
+                    {order.baristaName}
+                  </p>
+                  <div className="min-w-0">
+                    <p className="text-xs leading-relaxed break-words text-neutral-600 lg:text-sm">
+                      {order.items
+                        .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
+                        .join(", ")}
+                    </p>
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      {paymentLabel(order.paymentMethod)}
+                      {order.promoLabel ? ` · ${order.promoLabel}` : ""}
+                      {isVoided(order)
+                        ? ` · ${order.voidReason?.trim() || "Void"}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 lg:contents">
                     <span
-                      className={`mt-1 inline-block rounded px-2 py-0.5 text-[10px] font-medium ${
+                      className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[10px] font-medium lg:mt-0.5 lg:text-xs ${
                         isVoided(order)
                           ? "bg-red-100 text-red-700"
                           : "bg-black text-white"
@@ -997,91 +1037,15 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                     >
                       {isVoided(order) ? "Void" : "Completed"}
                     </span>
+                    <p className="shrink-0 text-sm font-semibold lg:text-right">
+                      {formatMoney(order.total)}
+                    </p>
                   </div>
                 </div>
-                <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-                  {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
-                </p>
-                <p className="mt-2 text-[11px] text-neutral-500">
-                  {paymentLabel(order.paymentMethod)}
-                  {order.promoLabel ? ` · ${order.promoLabel}` : ""}
-                </p>
-                {isVoided(order) ? (
-                  <p className="mt-2 text-[11px] text-neutral-500">
-                    Reason: {order.voidReason?.trim() || "—"}
-                  </p>
-                ) : null}
-              </article>
-            ))
-          )}
-        </div>
-        <div className="mt-4 hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="border-b border-neutral-200 text-neutral-500">
-              <tr>
-                <th className="py-3 font-normal">Time</th>
-                <th className="py-3 font-normal">Cashier</th>
-                <th className="py-3 font-normal">Items</th>
-                <th className="py-3 font-normal">Status</th>
-                <th className="py-3 font-normal">Reason</th>
-                <th className="py-3 font-normal">Promo</th>
-                <th className="py-3 font-normal">Pay</th>
-                <th className="py-3 font-normal text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {latest.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-6 text-center text-neutral-500">
-                    No recent orders found for the selected range.
-                  </td>
-                </tr>
-              ) : (
-                latest.map((order: Order, ordIdx: number) => (
-                  <tr key={`${order.id}-${ordIdx}`} className="border-b border-neutral-200">
-                    <td className="py-3 whitespace-nowrap">
-                      {new Date(order.createdAt).toLocaleString("en-US", {
-                        timeZone: "Asia/Manila",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: true,
-                      })}
-                    </td>
-                    <td className="py-3">{order.baristaName}</td>
-                    <td className="py-3 text-neutral-600">
-                      {order.items
-                        .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
-                        .join(", ")}
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                          isVoided(order)
-                        ? "bg-red-100 text-red-700"
-                        : "bg-black text-white"
-                        }`}
-                      >
-                        {isVoided(order) ? "Void" : "Completed"}
-                      </span>
-                    </td>
-                    <td className="max-w-[220px] py-3 text-neutral-500">
-                      {isVoided(order) ? order.voidReason?.trim() || "—" : "—"}
-                    </td>
-                    <td className="py-3 text-neutral-500">
-                      {order.promoLabel ?? "—"}
-                    </td>
-                    <td className="py-3 text-neutral-500">
-                      {paymentLabel(order.paymentMethod)}
-                    </td>
-                    <td className="py-3 text-right">{formatMoney(order.total)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
