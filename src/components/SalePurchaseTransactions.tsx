@@ -1097,7 +1097,7 @@ export function SalePurchaseTransactions({
                         /><span className="font-normal">pcs</span></div>
                       </td>
                       <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">
-                        {cupsLeft == null ? "—" : `${cupsLeft.toFixed(1)} cups`}
+                        {s.unit.trim().toLowerCase() === "pcs" || cupsLeft == null ? "—" : `${cupsLeft.toFixed(1)} cups`}
                       </td>
                       <td className="p-3 border-r border-neutral-200 text-center">
                         <div className="flex items-center justify-center gap-1">
