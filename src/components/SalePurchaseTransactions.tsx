@@ -1014,9 +1014,9 @@ export function SalePurchaseTransactions({
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
-                      <td className="p-2 border-r border-neutral-200 text-right">{opening.toFixed(2)} {s.unit}</td>
+                      <td className="p-2 border-r border-neutral-200 text-right">{opening.toFixed(2)} pcs</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-semibold text-black">
-                        {restocked > 0 ? `+${restocked}` : 0} {s.unit}
+                        {restocked > 0 ? `+${restocked}` : 0} pcs
                       </td>
                       <td className="p-1 border-r border-neutral-200 text-right text-red-600 font-medium">
                         <input
@@ -1032,7 +1032,7 @@ export function SalePurchaseTransactions({
                       <td className="p-2 border-r border-neutral-200 text-neutral-600">{s.unit}</td>
                       <td className="p-2 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s, Number(used))}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
-                        <input
+                        <div className="flex items-center justify-end gap-1"><input
                           aria-label={`Remaining stock for ${s.name}`}
                           type="number"
                           min="0"
@@ -1055,7 +1055,7 @@ export function SalePurchaseTransactions({
                             void persistInventory(nextStocks);
                           }}
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right font-bold"
-                        />
+                        /><span className="font-normal">pcs</span></div>
                       </td>
                       <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">
                         {cupsLeft == null ? "—" : `${cupsLeft.toFixed(1)} cups`}
