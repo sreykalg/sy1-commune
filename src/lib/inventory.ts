@@ -151,13 +151,17 @@ export function cupsFromQuantity(
   return quantity / perCup;
 }
 
+function comparableItemName(value: string) {
+  return value.trim().toLowerCase().replace(/(.)\1+/g, "$1");
+}
+
 export function findCostingForItem(costings: CostingItem[], name: string): CostingItem | undefined {
-  const needle = name.trim().toLowerCase();
+  const needle = comparableItemName(name);
   if (!needle) return undefined;
   return costings.find((costing) => {
     if (costing.productName.toLowerCase() === needle) return true;
     return costing.ingredients.some((ing) => {
-      const ingName = ing.name.trim().toLowerCase();
+      const ingName = comparableItemName(ing.name);
       return ingName === needle || ingName.includes(needle) || needle.includes(ingName);
     });
   });
@@ -169,9 +173,9 @@ export function costingIngredientForItem(
 ): CostingIngredient | undefined {
   const costing = findCostingForItem(costings, name);
   if (!costing) return undefined;
-  const needle = name.trim().toLowerCase();
+  const needle = comparableItemName(name);
   return (
-    costing.ingredients.find((ing) => ing.name.trim().toLowerCase() === needle) ??
+    costing.ingredients.find((ing) => comparableItemName(ing.name) === needle) ??
     costing.ingredients[0]
   );
 }
