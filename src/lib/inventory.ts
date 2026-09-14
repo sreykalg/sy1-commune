@@ -272,7 +272,7 @@ export function ingredientsForOrderLine(
     return drink === line.productId || normalizedNames.has(normalizedDrink);
   };
   const recipeCostings = store.recipeCostings ?? [];
-  const costing = recipeCostings.find((entry) => entry.drinks.some(matchesDrink));
+  const costing = [...recipeCostings].reverse().find((entry) => entry.drinks.some(matchesDrink));
 
   // When costings exist, they are the only source of truth. Never fall back to a stale recipe,
   // because that can deduct the wrong cup and omit ingredients such as milk.

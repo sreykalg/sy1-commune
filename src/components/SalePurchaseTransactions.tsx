@@ -314,9 +314,12 @@ export function SalePurchaseTransactions({
 
   function toggleCostingDrink(index: number, drink: string) {
     setRecipeCostings((rows) => rows.map((row, rowIndex) => {
-      if (rowIndex !== index) return row;
-      const drinks = row.drinks.includes(drink) ? row.drinks.filter((name) => name !== drink) : [...row.drinks, drink];
-      return { ...row, drinks };
+      if (rowIndex === index) {
+        const drinks = row.drinks.includes(drink) ? row.drinks.filter((name) => name !== drink) : [...row.drinks, drink];
+        return { ...row, drinks };
+      }
+      // A drink may belong to exactly one costing. Remove stale duplicate assignments.
+      return { ...row, drinks: row.drinks.filter((name) => name.trim().toLowerCase() !== drink.trim().toLowerCase()) };
     }));
   }
 
@@ -334,7 +337,7 @@ export function SalePurchaseTransactions({
     nextCostings.forEach((costing) => costing.drinks.forEach((drink) => {
       const ingredients = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
       recipes[drink] = ingredients;
-      const menuItem = recipeMenu.find((item) => item.name.trim().toLowerCase() === drink.trim().toLowerCase());
+      const menuItem = recipeMenu.find((item) => item.name.trim().toLowerCase() === drink.trim().toLowerCase() || item.name.trim().toLowerCase().replace(/s$/, "") === drink.trim().toLowerCase().replace(/s$/, ""));
       if (menuItem) recipes[menuItem.id] = ingredients;
     }));
     const savedCostings = nextCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` }));
