@@ -278,8 +278,11 @@ export function SalePurchaseTransactions({
   type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[] };
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
   const [expandedCostings, setExpandedCostings] = useState<Set<number>>(new Set());
+  const hasHydratedCostings = useRef(false);
 
   useEffect(() => {
+    if (hasHydratedCostings.current) return;
+    hasHydratedCostings.current = true;
     const saved = store.recipeCostings;
     if (saved && saved.length > 0) setRecipeCostings(saved);
   }, [store.recipeCostings]);
