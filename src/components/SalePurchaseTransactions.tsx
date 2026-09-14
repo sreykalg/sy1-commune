@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
-import { costingIngredientForItem, cupsFromQuantity, formatQty, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
+import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
 
@@ -203,23 +203,34 @@ export function SalePurchaseTransactions({
     stock: item.stock,
     unit: item.unit || "pcs",
   }));
+  const orderUsageRows = store.orders
+    .filter((order) => !order.voided)
+    .flatMap((order) => order.items.flatMap((line) => ingredientsForOrderLine(store, line).map((ingredient, ingredientIndex) => ({
+      id: `${order.id}-${line.productId}-${ingredientIndex}`,
+      orderId: order.id,
+      date: order.createdAt,
+      itemName: ingredient.name,
+      usedAmount: roundQty(Number(ingredient.amount) * line.qty),
+      unit: ingredient.unit,
+      soldAs: order.items.map((item) => `${item.qty}x ${item.name}`).join(", "),
+    }))));
+  const sourceUsages = orderUsageRows.length > 0 ? orderUsageRows : store.usageLogs;
   const reconstructedRemaining = remainingForUsages(
-    store.usageLogs,
+    sourceUsages,
     store.restocks ?? [],
     store.inventory,
   );
-  const persistedUsages: UsageRecord[] = store.usageLogs
-    .map((entry, index) => ({ entry, index, order: store.orders.find((item) => item.id === entry.orderId) }))
-    .filter(({ order }) => Boolean(order && !order.voided))
-    .map(({ entry, index, order }) => ({
+  const persistedUsages: UsageRecord[] = sourceUsages
+    .map((entry, index) => ({
+      ...entry,
       id: entry.id,
       orderId: entry.orderId,
       date: entry.date,
       itemName: entry.itemName,
       usedAmount: entry.usedAmount,
       unit: entry.unit,
-      remaining: reconstructedRemaining[index] ?? entry.remaining ?? 0,
-      soldAs: order!.items.map((item) => `${item.qty}x ${item.name}`).join(", "),
+      remaining: reconstructedRemaining[index] ?? ("remaining" in entry ? entry.remaining : 0),
+      soldAs: "soldAs" in entry ? entry.soldAs : "",
     }))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 

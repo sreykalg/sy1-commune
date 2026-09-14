@@ -253,8 +253,11 @@ function cupForDrink(
   return peta ?? daba ?? hot;
 }
 
-export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
-  const menuItem = store.menu.find((item) => item.id === line.productId);
+export function ingredientsForOrderLine(
+  store: Partial<Pick<StoreData, "menu" | "recipes" | "recipeCostings">>,
+  line: OrderItem,
+): RecipeIngredient[] {
+  const menuItem = (store.menu ?? []).find((item) => item.id === line.productId);
   const names = [line.name, menuItem?.name].filter((value): value is string => Boolean(value));
   const normalizeDrink = (value: string) => value
     .trim()
