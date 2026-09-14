@@ -1,4 +1,4 @@
-import type { DrinkStyle, MenuItem, OrderItem } from "@/lib/types";
+import type { DrinkStyle, MenuAddon, MenuItem, OrderAddon, OrderItem } from "@/lib/types";
 
 export const MENU_IMAGES = [
   { label: "Logo", src: "/images/logo.jpg" },
@@ -40,9 +40,110 @@ export function parseDrinkStyle(value: unknown): DrinkStyle | undefined {
   return value === "hot" || value === "iced" ? value : undefined;
 }
 
+export function addonIdFromName(name: string, index = 0) {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug || "addon"}-${index}`;
+}
+
+export function normalizeMenuAddons(item: Pick<MenuItem, "addons"> | undefined): MenuAddon[] {
+  if (!Array.isArray(item?.addons)) return [];
+  const seen = new Set<string>();
+  return item.addons.flatMap((addon, index) => {
+    const name = String(addon?.name ?? "").trim();
+    if (!name) return [];
+    const price = Math.max(0, Math.round(Number(addon.price) || 0));
+    let id = String(addon.id ?? "").trim() || addonIdFromName(name, index);
+    if (seen.has(id)) id = `${id}-${index}`;
+    seen.add(id);
+    const inventoryItemId = String(addon.inventoryItemId ?? "").trim();
+    return [
+      {
+        id,
+        name,
+        price,
+        qtyEnabled: Boolean(addon.qtyEnabled),
+        inventoryItemId: inventoryItemId || undefined,
+      },
+    ];
+  });
+}
+
+export function addonAllowsQty(addon: Pick<MenuAddon, "name" | "qtyEnabled">) {
+  return /espresso|shot/i.test(addon.name);
+}
+
+export function resolveOrderAddons(
+  menuItem: MenuItem,
+  selected?: OrderAddon[] | null,
+): OrderAddon[] {
+  const catalog = new Map(normalizeMenuAddons(menuItem).map((addon) => [addon.id, addon]));
+  if (!Array.isArray(selected)) return [];
+  return selected.flatMap((entry) => {
+    const addon = catalog.get(String(entry?.id ?? ""));
+    if (!addon) return [];
+    const qty = Math.max(0, Math.min(9, Math.floor(Number(entry.qty) || 0)));
+    if (qty < 1) return [];
+    return [{ id: addon.id, name: addon.name, price: addon.price, qty: addonAllowsQty(addon) ? qty : 1 }];
+  });
+}
+
+export function addonExtra(addons?: OrderAddon[] | null) {
+  return (addons ?? []).reduce((sum, addon) => sum + addon.price * Math.max(1, addon.qty || 1), 0);
+}
+
+export function cartLineUnitPrice(item: Pick<OrderItem, "price" | "addons">) {
+  return Number(item.price) + addonExtra(item.addons);
+}
+
+function addonPriceLabel(addon: OrderAddon) {
+  const qty = Math.max(1, addon.qty || 1);
+  const name = qty > 1 ? `${qty}× ${addon.name}` : addon.name;
+  if (!addon.price) return name;
+  return `${name} ₱${addon.price * qty}`;
+}
+
+export function orderLineOptionsLabel(item: Pick<OrderItem, "style" | "addons" | "name">) {
+  const parts: string[] = [];
+  const style =
+    parseDrinkStyle(item.style) ??
+    (/·\s*hot$/i.test(item.name) || /\(hot\)$/i.test(item.name)
+      ? "hot"
+      : /·\s*iced$/i.test(item.name) || /\(iced\)$/i.test(item.name)
+        ? "iced"
+        : undefined);
+  if (style) parts.push(drinkStyleLabel(style));
+  for (const addon of item.addons ?? []) {
+    if (!addon?.name) continue;
+    parts.push(addonPriceLabel(addon));
+  }
+  return parts.join(", ");
+}
+
+export function drinkDisplayName(item: Pick<OrderItem, "name">) {
+  return item.name.replace(/\s*·\s*(Iced|Hot)\s*$/i, "").trim() || item.name;
+}
+
+export function orderLineListLabel(item: OrderItem) {
+  const options = orderLineOptionsLabel(item);
+  const name = drinkDisplayName(item);
+  return options ? `${name} (${options})` : name;
+}
+
+export function cartLineKey(item: Pick<OrderItem, "productId" | "style" | "addons">) {
+  const addons = (item.addons ?? [])
+    .filter((addon) => addon.qty > 0)
+    .map((addon) => `${addon.id}:${addon.qty}`)
+    .sort()
+    .join(",");
+  return `${item.productId}|${item.style ?? ""}|${addons}`;
+}
+
 export function pricedOrderLine(
   menuItem: MenuItem,
-  line: Pick<OrderItem, "qty" | "name" | "style">,
+  line: Pick<OrderItem, "qty" | "name" | "style" | "addons">,
 ): OrderItem {
   const qty = Number(line.qty);
   const style =
@@ -54,13 +155,15 @@ export function pricedOrderLine(
         : undefined);
   const allowed = normalizeMenuStyles(menuItem);
   const nextStyle = style && allowed.includes(style) ? style : allowed.length === 1 ? allowed[0] : undefined;
+  const addons = resolveOrderAddons(menuItem, line.addons);
   return {
     productId: menuItem.id,
-    name: nextStyle ? `${menuItem.name} · ${drinkStyleLabel(nextStyle)}` : menuItem.name,
+    name: menuItem.name,
     qty,
-    price: menuItem.price,
+    price: menuItem.price + addonExtra(addons),
     category: menuItem.category,
     style: nextStyle,
+    addons,
   };
 }
 

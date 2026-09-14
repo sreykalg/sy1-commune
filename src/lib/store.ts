@@ -12,7 +12,7 @@ import type {
   StoreData,
 } from "@/lib/types";
 import { CUP_SKUS, cupSkuForItem } from "@/lib/inventory";
-import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuStyles } from "@/lib/menu";
+import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { DEFAULT_LOGIN_GATES, normalizeLoginGates } from "@/lib/staff-gates";
 import { DEFAULT_PROMOS } from "@/lib/promos";
@@ -225,18 +225,27 @@ function normalizeStore(store: StoreData): StoreData {
   if (!Array.isArray(store.orders)) {
     store.orders = [];
   } else {
-    store.orders = store.orders.map((order: Order) => ({
-      ...order,
-      items: Array.isArray(order.items)
-        ? order.items.map((item) => ({
-            ...item,
-            category: item.category ?? categoryByProduct.get(item.productId),
-          }))
-        : [],
-      paymentMethod: parsePayment(order.paymentMethod),
-      voided: Boolean(order.voided),
-      voidReason: typeof order.voidReason === "string" ? order.voidReason : "",
-    }));
+    store.orders = store.orders
+      .filter(
+        (order): order is Order =>
+          Boolean(order && typeof order === "object" && typeof order.id === "string"),
+      )
+      .map((order: Order) => ({
+        ...order,
+        items: Array.isArray(order.items)
+          ? order.items.filter((item) => item && typeof item === "object")
+          : [],
+        paymentMethod: parsePayment(order.paymentMethod),
+        voided: Boolean(order.voided),
+        voidReason: typeof order.voidReason === "string" ? order.voidReason : "",
+      }))
+      .map((order: Order) => ({
+        ...order,
+        items: order.items.map((item) => ({
+          ...item,
+          category: item.category ?? categoryByProduct.get(item.productId),
+        })),
+      }));
   }
   if (!Array.isArray(store.printJobs)) {
     store.printJobs = [];
@@ -252,12 +261,21 @@ function normalizeStore(store: StoreData): StoreData {
   if (!Array.isArray(store.menu) || store.menu.length === 0) {
     store.menu = DEFAULT_MENU.map((item) => ({ ...item }));
   } else {
-    store.menu = store.menu.map((item: MenuItem) => ({
-      ...item,
-      available: item.available !== false,
-      image: item.image || "/images/drinks.jpg",
-      styles: normalizeMenuStyles(item),
-    }));
+    store.menu = store.menu
+      .filter(
+        (item): item is MenuItem =>
+          Boolean(item && typeof item === "object" && typeof item.id === "string"),
+      )
+      .map((item: MenuItem) => ({
+        ...item,
+        available: item.available !== false,
+        image: item.image || "/images/drinks.jpg",
+        styles: normalizeMenuStyles(item),
+        addons: normalizeMenuAddons(item),
+      }));
+    if (store.menu.length === 0) {
+      store.menu = DEFAULT_MENU.map((item) => ({ ...item }));
+    }
   }
   store.categories = uniqueCategories([
     ...(Array.isArray(store.categories) ? store.categories : []),
@@ -352,6 +370,15 @@ function normalizeStore(store: StoreData): StoreData {
   }
   if (!Array.isArray(store.loginActivity)) {
     store.loginActivity = [];
+  } else {
+    store.loginActivity = store.loginActivity.filter(
+      (entry) =>
+        entry &&
+        typeof entry.id === "string" &&
+        typeof entry.userId === "string" &&
+        typeof entry.at === "string" &&
+        (entry.type === "login" || entry.type === "logout"),
+    );
   }
   if (!Array.isArray(store.offRequests)) {
     store.offRequests = [];
@@ -363,7 +390,9 @@ function normalizeStore(store: StoreData): StoreData {
       (request) =>
         request &&
         typeof request.id === "string" &&
-        (request.status === "pending" || request.status === "approved") &&
+        (request.status === "pending" ||
+          request.status === "approved" ||
+          request.status === "denied") &&
         Array.isArray(request.items),
     );
   }
@@ -499,6 +528,11 @@ async function readStore(): Promise<StoreData> {
 }
 
 async function writeStore(store: StoreData): Promise<void> {
+  if (Array.isArray(store.printJobs) && store.printJobs.length > 300) {
+    store.printJobs = [...store.printJobs]
+      .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
+      .slice(0, 300);
+  }
   const { error } = await supabaseAdmin().from("store_state").upsert(
     { id: STORE_STATE_ID, payload: store, updated_at: new Date().toISOString() },
     { onConflict: "id" },

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
 import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
@@ -394,6 +394,7 @@ export function SalePurchaseTransactions({
   const [rangeType, setRangeType] = useState<PeriodRange>("today");
   const [filterDate, setFilterDate] = useState(getTodayDate);
   const [filterMode, setFilterMode] = useState<"range" | "date">("range");
+  const [openUsageOrders, setOpenUsageOrders] = useState<string[]>([]);
 
   const handleTotalUsedChange = (itemName: string, value: string) => {
     const nextTotal = Math.max(0, Number(value) || 0);
@@ -832,10 +833,40 @@ export function SalePurchaseTransactions({
     return matchesKw && matchesTp && inDateRange(t.date);
   });
 
-  const filteredUsages = usages.filter((u) => {
-    const matchesKw = u.itemName.toLowerCase().includes(filterKeyword.toLowerCase());
-    return matchesKw && inDateRange(u.date);
-  });
+  const usageGroups = useMemo(() => {
+    const byOrder = new Map<string, UsageRecord[]>();
+    for (const usage of usages) {
+      if (!inDateRange(usage.date)) continue;
+      const key = usage.orderId || usage.id;
+      const list = byOrder.get(key) ?? [];
+      list.push(usage);
+      byOrder.set(key, list);
+    }
+    const keyword = filterKeyword.trim().toLowerCase();
+    return [...byOrder.entries()]
+      .map(([orderId, items]) => {
+        const order = store.orders.find((entry) => entry.id === orderId);
+        const orderLabel =
+          order?.ticketNo != null ? `#${order.ticketNo}` : orderId;
+        return {
+          orderId,
+          orderLabel,
+          date: items[0]?.date ?? order?.createdAt ?? "",
+          soldAs: items[0]?.soldAs || "—",
+          items,
+        };
+      })
+      .filter((group) => {
+        if (!keyword) return true;
+        return (
+          group.orderId.toLowerCase().includes(keyword) ||
+          group.orderLabel.toLowerCase().includes(keyword) ||
+          group.soldAs.toLowerCase().includes(keyword) ||
+          group.items.some((item) => item.itemName.toLowerCase().includes(keyword))
+        );
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.orderId.localeCompare(a.orderId));
+  }, [filterKeyword, rangeEnd, rangeStart, store.orders, usages]);
 
   const dateRangeFilter = (
     <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -1356,28 +1387,83 @@ export function SalePurchaseTransactions({
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead>
                 <tr className="bg-black border-b border-black text-white text-xs font-semibold">
+                  <th className="p-3 border-r border-white/15">Order ID</th>
                   <th className="p-3 border-r border-white/15">Date</th>
-                  <th className="p-3 border-r border-white/15">Item Name</th>
-                  <th className="p-3 border-r border-white/15">Sold as</th>
-                  <th className="p-3 border-r border-white/15 text-right">Used Amount</th>
-                  <th className="p-3 border-r border-white/15 text-right">Remaining</th>
-                  <th className="p-3 text-center">Unit</th>
+                  <th className="p-3">Sold as</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsages.length === 0 ? (
-                  <tr><td colSpan={6} className="p-4 text-center text-neutral-500 text-xs">No usage records found.</td></tr>
+                {usageGroups.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="p-4 text-center text-neutral-500 text-xs">
+                      No usage records found.
+                    </td>
+                  </tr>
                 ) : (
-                  filteredUsages.map((u, index) => (
-                    <tr key={`${u.id}-${index}`} className="border-b border-neutral-200 text-xs">
-                      <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium whitespace-nowrap">{phDateTimeLabel(u.date)}</td>
-                      <td className="p-3 border-r border-neutral-200 font-medium">{u.itemName}</td>
-                      <td className="p-3 border-r border-neutral-200 text-neutral-600">{u.soldAs || "—"}</td>
-                      <td className="p-3 border-r border-neutral-200 text-right font-bold text-red-600">-{formatQty(u.usedAmount)}</td>
-                      <td className="p-3 border-r border-neutral-200 text-right font-semibold">{formatQty(u.remaining)}</td>
-                      <td className="p-3 text-center text-neutral-600">{u.unit}</td>
-                    </tr>
-                  ))
+                  usageGroups.map((group) => {
+                    const open = openUsageOrders.includes(group.orderId);
+                    return (
+                      <Fragment key={group.orderId}>
+                        <tr
+                          className="cursor-pointer border-b border-neutral-200 text-xs hover:bg-neutral-50"
+                          onClick={() =>
+                            setOpenUsageOrders((current) =>
+                              current.includes(group.orderId)
+                                ? current.filter((id) => id !== group.orderId)
+                                : [...current, group.orderId],
+                            )
+                          }
+                        >
+                          <td className="p-3 border-r border-neutral-200 font-semibold">
+                            <span className="inline-flex items-center gap-2">
+                              <svg
+                                viewBox="0 0 24 24"
+                                className={`h-3.5 w-3.5 stroke-current transition ${open ? "rotate-90" : ""}`}
+                                fill="none"
+                              >
+                                <path d="M9 6l6 6-6 6" strokeWidth="1.8" />
+                              </svg>
+                              {group.orderLabel}
+                            </span>
+                          </td>
+                          <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium whitespace-nowrap">
+                            {phDateTimeLabel(group.date)}
+                          </td>
+                          <td className="p-3 text-neutral-600">{group.soldAs}</td>
+                        </tr>
+                        {open ? (
+                          <tr className="border-b border-neutral-200 bg-neutral-50">
+                            <td colSpan={3} className="p-0">
+                              <table className="w-full text-left text-xs">
+                                <thead>
+                                  <tr className="text-[10px] tracking-wide text-neutral-500 uppercase">
+                                    <th className="px-3 py-2 pl-10">Item Name</th>
+                                    <th className="px-3 py-2 text-right">Used Amount</th>
+                                    <th className="px-3 py-2 text-right">Remaining</th>
+                                    <th className="px-3 py-2 text-center">Unit</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.items.map((usage, index) => (
+                                    <tr key={`${usage.id}-${index}`}>
+                                      <td className="px-3 py-2 pl-10 font-medium">{usage.itemName}</td>
+                                      <td className="px-3 py-2 text-right font-bold text-red-600">
+                                        -{formatQty(usage.usedAmount)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-semibold">
+                                        {formatQty(usage.remaining)}
+                                      </td>
+                                      <td className="px-3 py-2 text-center text-neutral-600">{usage.unit}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>

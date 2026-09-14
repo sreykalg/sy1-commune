@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { isFoodOrPastry, menuItemId, normalizeMenuStyles } from "@/lib/menu";
-import type { DrinkStyle } from "@/lib/types";
+import { addonIdFromName, isFoodOrPastry, menuItemId, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
+import type { DrinkStyle, MenuAddon } from "@/lib/types";
 import { updateStore, uploadPublicMenuPhoto } from "@/lib/store";
 
 const PHOTO_TYPES: Record<string, string> = {
@@ -76,6 +76,36 @@ function stylesFromForm(formData: FormData, category: string): DrinkStyle[] {
     return style === "iced" || style === "hot" ? [style] : [];
   });
   return normalizeMenuStyles({ category, styles: selected });
+}
+
+function addonsFromForm(formData: FormData): MenuAddon[] {
+  const packed = formData.get("addons");
+  if (typeof packed === "string" && packed.trim()) {
+    try {
+      const parsed = JSON.parse(packed) as MenuAddon[];
+      if (Array.isArray(parsed)) return normalizeMenuAddons({ addons: parsed });
+    } catch {
+      // Fall through to the field list below.
+    }
+  }
+  const names = formData.getAll("addonName").map((value) => String(value ?? "").trim());
+  const prices = formData.getAll("addonPrice").map((value) => String(value ?? "").trim());
+  const ids = formData.getAll("addonId").map((value) => String(value ?? "").trim());
+  const qtyFlags = formData.getAll("addonQtyEnabled").map((value) => String(value ?? "").trim());
+  return normalizeMenuAddons({
+    addons: names.flatMap((name, index) => {
+      if (!name) return [];
+      const price = Number(prices[index]);
+      return [
+        {
+          id: ids[index] || addonIdFromName(name, index),
+          name,
+          price: Number.isFinite(price) ? price : 0,
+          qtyEnabled: qtyFlags[index] === "1",
+        },
+      ];
+    }),
+  });
 }
 
 export async function addMenuCategory(name: string) {
@@ -198,6 +228,7 @@ export async function createMenuItem(formData: FormData) {
       image,
       available,
       styles: stylesFromForm(formData, category),
+      addons: addonsFromForm(formData),
     });
   });
   refresh();
@@ -240,6 +271,7 @@ export async function updateMenuItem(formData: FormData) {
     item.category = category;
     item.available = available;
     item.styles = stylesFromForm(formData, category);
+    item.addons = addonsFromForm(formData);
     if (uploaded) {
       item.image = uploaded;
     } else if (!isSafeImage(item.image)) {

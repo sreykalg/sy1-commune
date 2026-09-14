@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { approveVoidRequest } from "@/actions/pos";
-import { formatMoney } from "@/lib/menu";
+import { formatMoney, orderLineListLabel } from "@/lib/menu";
 import { phDateTimeLabel } from "@/lib/datetime";
 import { paymentLabel } from "@/lib/payments";
 import {
@@ -530,7 +530,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                   <p className="shrink-0 text-sm font-semibold">{formatMoney(request.total)}</p>
                 </div>
                 <p className="mt-3 text-sm text-neutral-700">
-                  {request.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                  {request.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                 </p>
                 <p className="mt-2 text-xs text-neutral-500">
                   Reason: {request.reason}
@@ -1000,7 +1000,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                   </div>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-                  {order.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                  {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                 </p>
                 <p className="mt-2 text-[11px] text-neutral-500">
                   {paymentLabel(order.paymentMethod)}
@@ -1052,7 +1052,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                     <td className="py-3">{order.baristaName}</td>
                     <td className="py-3 text-neutral-600">
                       {order.items
-                        .map((item) => `${item.qty}× ${item.name}`)
+                        .map((item) => `${item.qty}× ${orderLineListLabel(item)}`)
                         .join(", ")}
                     </td>
                     <td className="py-3">

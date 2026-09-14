@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { isDrinkCategory, nextTicketNo } from "@/lib/escpos";
-import { pricedOrderLine } from "@/lib/menu";
+import { orderLineOptionsLabel, pricedOrderLine } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { ingredientsForOrderLine, roundQty } from "@/lib/inventory";
 import { canUsePos } from "@/lib/users";
@@ -99,7 +99,9 @@ function labelJobsForOrder(
         updatedAt: createdAt,
         label: {
           productId: item.productId,
-          name: item.name,
+          name: orderLineOptionsLabel(item)
+            ? `${item.name} / ${orderLineOptionsLabel(item)}`
+            : item.name,
           price: item.price,
           itemIndex,
           copyIndex,
@@ -521,6 +523,21 @@ export async function requestVoidApproval(
   revalidatePath("/pos");
   revalidatePath("/admin");
   return { ok: true, requestId };
+}
+
+export async function getVoidRequestStatus(requestId: string) {
+  const session = await requirePos();
+  const store = await getStore();
+  const request = store.voidRequests.find((entry) => entry.id === requestId);
+  if (!request || request.requestedById !== session.userId) {
+    return { found: false as const };
+  }
+  return {
+    found: true as const,
+    status: request.status,
+    orderId: request.orderId ?? null,
+    processedOrderId: request.processedOrderId ?? null,
+  };
 }
 
 export async function deleteVoidRequest(requestId: string) {

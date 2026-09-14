@@ -1,4 +1,5 @@
 import { phDateString, phTimestamp } from "@/lib/datetime";
+import { normalizeMenuAddons } from "@/lib/menu";
 import type {
   CostingIngredient,
   CostingItem,

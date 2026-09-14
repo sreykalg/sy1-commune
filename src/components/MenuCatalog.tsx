@@ -10,8 +10,8 @@ import {
   setMenuItemAvailable,
   updateMenuItem,
 } from "@/actions/menu";
-import { DRINK_STYLES, drinkStyleLabel, drinkStyleLabelList, formatMoney, isFoodOrPastry, normalizeMenuStyles } from "@/lib/menu";
-import type { DrinkStyle, MenuItem } from "@/lib/types";
+import { addonIdFromName, DRINK_STYLES, drinkStyleLabel, drinkStyleLabelList, formatMoney, isFoodOrPastry, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
+import type { DrinkStyle, MenuAddon, MenuItem } from "@/lib/types";
 
 type MenuCatalogProps = {
   menu: MenuItem[];
@@ -103,6 +103,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
   const [itemCategory, setItemCategory] = useState("");
   const [itemAvailable, setItemAvailable] = useState(true);
   const [itemStyles, setItemStyles] = useState<DrinkStyle[]>([...DRINK_STYLES]);
+  const [itemAddons, setItemAddons] = useState<MenuAddon[]>([]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -131,6 +132,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     setItemCategory(filter !== "All" ? filter : categories[0] ?? "");
     setItemAvailable(true);
     setItemStyles(isFoodOrPastry(filter !== "All" ? filter : categories[0] ?? "") ? [] : [...DRINK_STYLES]);
+    setItemAddons([]);
     setNotice(null);
     setTab("items");
   }
@@ -142,6 +144,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     setItemCategory(item.category);
     setItemAvailable(item.available !== false);
     setItemStyles(normalizeMenuStyles(item));
+    setItemAddons(normalizeMenuAddons(item));
     setNotice(null);
     setTab("items");
   }
@@ -158,6 +161,7 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
     data.set("category", itemCategory);
     data.set("available", itemAvailable ? "true" : "false");
     for (const style of itemStyles) data.append("styles", style);
+    data.set("addons", JSON.stringify(itemAddons.filter((addon) => addon.name.trim())));
     return data;
   }
 
@@ -465,6 +469,84 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                     </div>
                   </div>
                 ) : null}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-neutral-600">Add-ons</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setItemAddons((current) => [
+                          ...current,
+                          {
+                            id: addonIdFromName("addon", current.length),
+                            name: "",
+                            price: 0,
+                            qtyEnabled: false,
+                          },
+                        ])
+                      }
+                      className="text-xs font-medium text-neutral-600 hover:text-black"
+                    >
+                      Add option
+                    </button>
+                  </div>
+                  {itemAddons.length === 0 ? (
+                    <p className="text-xs text-neutral-400">
+                      Example: Oatside milk ₱30, Extra espresso ₱40. Shots (x2, x3) are chosen on POS.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="hidden grid-cols-[1fr_120px_auto] gap-2 text-[11px] text-neutral-400 sm:grid">
+                        <span>Name</span>
+                        <span>Extra ₱</span>
+                        <span />
+                      </div>
+                      {itemAddons.map((addon, index) => (
+                        <div key={addon.id} className="grid grid-cols-[1fr_120px_auto] items-center gap-2">
+                          <input
+                            value={addon.name}
+                            onChange={(event) =>
+                              setItemAddons((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, name: event.target.value } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Oatside milk"
+                            className={field}
+                          />
+                          <input
+                            inputMode="numeric"
+                            value={addon.price === 0 ? "" : String(addon.price)}
+                            onChange={(event) => {
+                              const raw = event.target.value.replace(/[^\d]/g, "");
+                              setItemAddons((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, price: raw ? Math.max(0, Number(raw)) : 0 }
+                                    : entry,
+                                ),
+                              );
+                            }}
+                            className={field}
+                            aria-label="Add-on extra price"
+                            placeholder="20"
+                          />
+                          <button
+                            type="button"
+                            aria-label="Remove add-on"
+                            onClick={() =>
+                              setItemAddons((current) => current.filter((_, entryIndex) => entryIndex !== index))
+                            }
+                            className="text-xs text-neutral-400 hover:text-black"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <label className="flex items-center gap-2 text-sm text-neutral-700">
                     <input
@@ -508,7 +590,18 @@ export function MenuCatalog({ menu, categories }: MenuCatalogProps) {
                   ) : (
                     visibleItems.map((item) => (
                       <tr key={item.id} className="border-t border-neutral-100">
-                        <td className="px-4 py-3 font-medium">{item.name}</td>
+                        <td className="px-4 py-3 font-medium">
+                          <p>{item.name}</p>
+                          {normalizeMenuAddons(item).length > 0 ? (
+                            <p className="mt-0.5 text-[11px] text-neutral-400">
+                              {normalizeMenuAddons(item)
+                                .map((addon) =>
+                                  addon.price > 0 ? `${addon.name} +₱${addon.price}` : addon.name,
+                                )
+                                .join(", ")}
+                            </p>
+                          ) : null}
+                        </td>
                         <td className="px-4 py-3 text-neutral-500">{item.category}</td>
                         <td className="px-4 py-3 text-neutral-500">{drinkStyleLabelList(item)}</td>
                         <td className="px-4 py-3 text-right">{formatMoney(item.price)}</td>

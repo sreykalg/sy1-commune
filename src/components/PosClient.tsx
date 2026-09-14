@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/actions/auth";
 import { punchBaristaShift } from "@/actions/users";
@@ -8,6 +8,7 @@ import {
   beginPrintJob,
   createOrder,
   finishPrintJob,
+  getVoidRequestStatus,
   openPos,
   queueReprintJobs,
   requestVoidApproval,
@@ -20,7 +21,19 @@ import {
   SalePurchaseTransactions,
   type InventoryTab,
 } from "@/components/SalePurchaseTransactions";
-import { drinkStyleLabel, formatMoney, normalizeMenuStyles } from "@/lib/menu";
+import {
+  addonAllowsQty,
+  cartLineKey,
+  cartLineUnitPrice,
+  drinkDisplayName,
+  drinkStyleLabel,
+  formatMoney,
+  normalizeMenuAddons,
+  normalizeMenuStyles,
+  orderLineListLabel,
+  orderLineOptionsLabel,
+  resolveOrderAddons,
+} from "@/lib/menu";
 import { phDateString, phDateTimeLabel } from "@/lib/datetime";
 import { PAYMENT_METHODS, parsePayment, paymentLabel } from "@/lib/payments";
 import {
@@ -33,6 +46,7 @@ import type {
   DrinkStyle,
   MenuItem,
   Order,
+  OrderAddon,
   OrderItem,
   PaymentMethod,
   PrintJob,
@@ -90,6 +104,7 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
       const qty = Math.floor(Number(item.qty));
       if (!Number.isFinite(qty) || qty < 1) return [];
       const style = item.style === "hot" || item.style === "iced" ? item.style : undefined;
+      const addons = resolveOrderAddons(product, item.addons);
       return [
         {
           productId: product.id,
@@ -97,6 +112,7 @@ function readCheckout(userId: string, menu: MenuItem[]): SavedCheckout | null {
           qty,
           price: product.price,
           style,
+          addons,
         },
       ];
     });
@@ -158,22 +174,32 @@ export function PosClient({
   const [baristaPassword, setBaristaPassword] = useState("");
   const [baristaNotice, setBaristaNotice] = useState<string | null>(null);
   const [onShift, setOnShift] = useState(clockedInBaristas);
-  const [stylePick, setStylePick] = useState<MenuItem | null>(null);
+  const [drinkPick, setDrinkPick] = useState<{
+    item: MenuItem;
+    style?: DrinkStyle;
+    addons: Record<string, number>;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   const labelPrinter = useLabelPrinter();
   const receiptPrinter = useReceiptPrinter();
   const [checkoutReady, setCheckoutReady] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<PosPanel>("pos");
   const activePromos = PROMOTIONS_ENABLED
     ? promotions.filter((item) => item.active)
     : [];
   const appliedPromoId = PROMOTIONS_ENABLED ? promoId : null;
   const availableOrders = useMemo(() => {
-    const byId = new Map(orders.map((order) => [order.id, order]));
-    if (lastOrder) byId.set(lastOrder.id, lastOrder);
-    return [...byId.values()]
-      .filter((order) => !order.voided)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const byId = new Map(
+      orders.filter((order) => !order.voided).map((order) => [order.id, order]),
+    );
+    const lastOrderVoided = Boolean(
+      lastOrder && orders.some((order) => order.id === lastOrder.id && order.voided),
+    );
+    if (lastOrder && !lastOrder.voided && !lastOrderVoided) {
+      byId.set(lastOrder.id, lastOrder);
+    }
+    return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [lastOrder, orders]);
   const knownPrintJobs = useMemo(() => {
     const byId = new Map(printJobs.map((job) => [job.id, job]));
@@ -258,6 +284,22 @@ export function PosClient({
   }, [checkoutReady, session.userId, cart, tendered, paymentMethod, appliedPromoId, activeVoidRequestId]);
 
   useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
+
+  useEffect(() => {
     if (
       !promoId ||
       (PROMOTIONS_ENABLED &&
@@ -274,7 +316,7 @@ export function PosClient({
     };
   }, [promoId, promotions]);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = cart.reduce((sum, item) => sum + cartLineUnitPrice(item) * item.qty, 0);
   const promo = activePromos.find((item) => item.id === promoId) ?? null;
   const discount = promo
     ? promo.type === "percent"
@@ -298,7 +340,7 @@ export function PosClient({
           String(order.ticketNo ?? ""),
           order.baristaName,
           formatMoney(order.total),
-          ...order.items.map((item) => `${item.qty} ${item.name}`),
+          ...order.items.map((item) => `${item.qty} ${orderLineListLabel(item)}`),
         ]
           .join(" ")
           .toLowerCase();
@@ -319,22 +361,31 @@ export function PosClient({
     pos.isOpen &&
     cart.length > 0 &&
     (!isCash || paid >= total);
+  const appliedVoidRequestId = useRef<string | null>(null);
+  const lastOrderIdRef = useRef(lastOrderId);
+  lastOrderIdRef.current = lastOrderId;
+  const lastOrderRef = useRef(lastOrder);
+  lastOrderRef.current = lastOrder;
 
-  useEffect(() => {
-    if (!activeVoidRequestId || activeVoidRequest?.status === "approved") return;
-    const refreshTimer = window.setInterval(() => router.refresh(), 3000);
-    return () => window.clearInterval(refreshTimer);
-  }, [activeVoidRequest?.status, activeVoidRequestId, router]);
-
-  useEffect(() => {
-    if (!activeVoidRequestId || activeVoidRequest?.status !== "approved") return;
-    if (activeVoidRequest.orderId) {
-      if (lastOrderId === activeVoidRequest.orderId) {
-        setLastOrderId(null);
-        setLastTicket(null);
-        setLastOrder(null);
-      }
-    } else {
+  function applyApprovedVoid(
+    requestId: string,
+    request: {
+      orderId?: string | null;
+      processedOrderId?: string | null;
+    },
+  ) {
+    if (appliedVoidRequestId.current === requestId) return;
+    appliedVoidRequestId.current = requestId;
+    const voidedId = request.orderId ?? request.processedOrderId ?? null;
+    if (
+      voidedId &&
+      (lastOrderIdRef.current === voidedId || lastOrderRef.current?.id === voidedId)
+    ) {
+      setLastOrderId(null);
+      setLastTicket(null);
+      setLastOrder(null);
+    }
+    if (!request.orderId) {
       setCart([]);
       setTendered("");
       setPaymentMethod("cash");
@@ -345,28 +396,94 @@ export function PosClient({
     setVoidTargetId(null);
     setVoidReason("");
     setMessage("Admin approved the void. The checkout has been voided.");
-  }, [activeVoidRequest, activeVoidRequestId, lastOrderId]);
+    router.refresh();
+  }
 
-  function addItem(id: string, name: string, price: number, style?: DrinkStyle) {
+  useEffect(() => {
+    if (!lastOrderId) return;
+    const serverOrder = orders.find((order) => order.id === lastOrderId);
+    if (!serverOrder?.voided) return;
+    setLastOrderId(null);
+    setLastTicket(null);
+    setLastOrder(null);
+    if (printOrderId === lastOrderId) setPrintOrderId(null);
+  }, [lastOrderId, orders, printOrderId]);
+
+  useEffect(() => {
+    if (!activeVoidRequestId) return;
+    const requestId: string = activeVoidRequestId;
+    if (activeVoidRequest?.status === "approved") {
+      applyApprovedVoid(requestId, activeVoidRequest);
+      return;
+    }
+
+    let cancelled = false;
+    async function checkVoidRequest() {
+      const result = await getVoidRequestStatus(requestId);
+      if (cancelled || !result.found || result.status !== "approved") return;
+      applyApprovedVoid(requestId, result);
+    }
+
+    void checkVoidRequest();
+    const timer = window.setInterval(() => {
+      void checkVoidRequest();
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeVoidRequest, activeVoidRequestId, router]);
+
+  function selectedAddonsFor(item: MenuItem, selected: Record<string, number>): OrderAddon[] {
+    return resolveOrderAddons(
+      item,
+      normalizeMenuAddons(item).map((addon) => ({
+        id: addon.id,
+        name: addon.name,
+        price: addon.price,
+        qty: selected[addon.id] ?? 0,
+      })),
+    );
+  }
+
+  function addItem(id: string, name: string, price: number, style?: DrinkStyle, addons: OrderAddon[] = []) {
     if (!pos.isOpen || isManager || voidRequestPending) {
       return;
     }
+    const nextLine = { productId: id, name, qty: 1, price, style, addons };
+    const nextKey = cartLineKey(nextLine);
     setCart((current) => {
-      const existing = current.find((item) => item.productId === id && item.style === style);
+      const existing = current.find((item) => cartLineKey(item) === nextKey);
       if (existing) {
         return current.map((item) =>
-          item.productId === id && item.style === style ? { ...item, qty: item.qty + 1 } : item,
+          cartLineKey(item) === nextKey ? { ...item, qty: item.qty + 1 } : item,
         );
       }
-      return [...current, { productId: id, name, qty: 1, price, style }];
+      return [...current, nextLine];
     });
     setMessage(null);
   }
 
+  function confirmDrinkPick(pick: { item: MenuItem; style?: DrinkStyle; addons: Record<string, number> }) {
+    addItem(
+      pick.item.id,
+      pick.item.name,
+      pick.item.price,
+      pick.style,
+      selectedAddonsFor(pick.item, pick.addons),
+    );
+    setDrinkPick(null);
+  }
+
   function handleMenuTap(item: MenuItem) {
     const styles = normalizeMenuStyles(item);
-    if (styles.length > 1) {
-      setStylePick(item);
+    const addons = normalizeMenuAddons(item);
+    if (styles.length > 1 || addons.length > 0) {
+      setDrinkPick({
+        item,
+        style: styles.length === 1 ? styles[0] : undefined,
+        addons: {},
+      });
       return;
     }
     addItem(item.id, item.name, item.price, styles[0]);
@@ -491,13 +608,16 @@ export function PosClient({
     });
   }
 
+  const canPrint = Boolean(lastOrderId) && cart.length === 0 && !voidRequestPending;
+
   function printTicket() {
-    const order =
-      (lastOrderId
-        ? availableOrders.find((entry) => entry.id === lastOrderId)
-        : undefined) ?? availableOrders[0];
+    if (!canPrint || !lastOrderId) {
+      setMessage("Charge the order before printing.");
+      return;
+    }
+    const order = availableOrders.find((entry) => entry.id === lastOrderId);
     if (!order) {
-      setMessage("Complete an order before opening the print flow.");
+      setMessage("Charge the order before printing.");
       return;
     }
     setPrintOrderId(order.id);
@@ -626,131 +746,384 @@ export function PosClient({
   return (
     <div className="pos-root relative flex h-svh flex-col overflow-hidden bg-neutral-100 text-black">
       <div className="pos-screen flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between bg-black px-4 text-white">
-          <div className="flex min-w-0 items-center gap-3">
-            <p className="text-base font-bold tracking-tight lowercase">commune.</p>
-            <p className="truncate text-sm font-medium text-white/80">
+        <header className="flex h-12 shrink-0 items-center gap-3 bg-black px-3 text-white">
+          <button
+            type="button"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-white transition hover:bg-neutral-800"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 stroke-current" fill="none">
+              {menuOpen ? (
+                <path d="M6 6l12 12M18 6L6 18" strokeWidth="1.8" />
+              ) : (
+                <path d="M5 8h14M5 12h14M5 16h14" strokeWidth="1.8" />
+              )}
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActivePanel("pos");
+              setMenuOpen(false);
+            }}
+            className="text-base font-bold tracking-tight lowercase"
+          >
+            commune.
+          </button>
+          {activePanel !== "pos" ? (
+            <p className="truncate text-sm font-medium text-white/70">
+              {activePanel === "stock" ? "Stock inventory" : "Restock"}
+            </p>
+          ) : null}
+        </header>
+
+        <button
+          type="button"
+          tabIndex={menuOpen ? 0 : -1}
+          aria-label="Close menu"
+          onClick={() => setMenuOpen(false)}
+          className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ${
+            menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="POS menu"
+          aria-hidden={!menuOpen}
+          className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white text-black shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition-transform duration-200 ${
+            menuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
+            <button
+              type="button"
+              onClick={() => {
+                setActivePanel("pos");
+                setMenuOpen(false);
+              }}
+              className="text-sm font-semibold tracking-tight lowercase"
+            >
+              commune.
+            </button>
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-300 text-neutral-700 transition hover:border-black hover:bg-black hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 stroke-current" fill="none">
+                <path d="M6 6l12 12M18 6L6 18" strokeWidth="1.8" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <button
+              type="button"
+              aria-current={activePanel === "pos" ? "page" : undefined}
+              onClick={() => {
+                setActivePanel("pos");
+                setMenuOpen(false);
+              }}
+              className={`mb-3 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+                activePanel === "pos"
+                  ? "bg-black text-white"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
+              }`}
+            >
+              POS
+            </button>
+            {!isManager ? (
+              <div>
+                <p className="px-4 pb-1 text-[11px] font-medium tracking-wide text-neutral-400 uppercase">
+                  Inventory
+                </p>
+                {(
+                  [
+                    ["stock", "Stock inventory"],
+                    ["restock", "Restock"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={activePanel === id ? "page" : undefined}
+                    onClick={() => {
+                      setActivePanel(id);
+                      setMenuOpen(false);
+                    }}
+                    className={`mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+                      activePanel === id
+                        ? "bg-black text-white"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className={`${isManager ? "" : "mt-4 border-t border-neutral-100 pt-4"}`}>
+              <button
+                type="button"
+                disabled={pending || !labelPrinter.supported}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      if (labelPrinter.connected) {
+                        await labelPrinter.disconnect();
+                        setMessage("Label printer disconnected.");
+                        return;
+                      }
+                      await labelPrinter.connect();
+                      setMessage("Label printer connected.");
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error ? error.message : "Label printer error.",
+                      );
+                    }
+                  })
+                }
+                className="mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
+              >
+                {labelPrinter.connected ? "Labels on" : "Connect labels"}
+              </button>
+              <button
+                type="button"
+                disabled={pending || !receiptPrinter.supported}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      if (receiptPrinter.connected) {
+                        await receiptPrinter.disconnect();
+                        setMessage("Receipt printer disconnected.");
+                        return;
+                      }
+                      await receiptPrinter.connect();
+                      setMessage("Receipt printer connected.");
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error ? error.message : "Receipt printer error.",
+                      );
+                    }
+                  })
+                }
+                className="mb-1 w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
+              >
+                {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
+              </button>
+            </div>
+
+            <div className="mt-4 border-t border-neutral-100 pt-4">
+              <p className="px-4 pb-1 text-[11px] font-medium tracking-wide text-neutral-400 uppercase">
+                Baristas
+              </p>
+              {onShift.map((barista) => (
+                <div
+                  key={barista.id}
+                  className="mb-1 flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5"
+                >
+                  <p className="min-w-0 truncate text-sm font-medium">In - {barista.name}</p>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const result = await punchBaristaShift({ type: "logout", userId: barista.id });
+                        if (result && "error" in result && result.error) {
+                          setMessage(result.error);
+                          return;
+                        }
+                        setOnShift((current) => current.filter((entry) => entry.id !== barista.id));
+                        setMessage(`${barista.name} clocked out.`);
+                        router.refresh();
+                      })
+                    }
+                    className="shrink-0 rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium hover:border-black disabled:opacity-40"
+                  >
+                    Out
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setBaristaUsername("");
+                  setBaristaPassword("");
+                  setBaristaNotice(null);
+                  setBaristaModalOpen(true);
+                  setMenuOpen(false);
+                }}
+                className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black"
+              >
+                {onShift.length === 0 ? "Barista in" : "Barista in / out"}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-200 p-3">
+            <p className="px-4 py-2 text-sm font-medium text-neutral-900">
               {session.name}
-              <span className="ml-2 text-xs font-normal text-white/50">
+              <span className="ml-2 text-xs font-normal text-neutral-400">
                 {isManager ? "manager" : "cashier"}
               </span>
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setBaristaUsername("");
-                setBaristaPassword("");
-                setBaristaNotice(null);
-                setBaristaModalOpen(true);
-              }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:opacity-50 ${
-                onShift.length > 0
-                  ? "bg-white text-black hover:bg-neutral-200"
-                  : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
-              }`}
-            >
-              {onShift.length === 0
-                ? "Barista in"
-                : onShift.length === 1
-                  ? `In - ${onShift[0].name}`
-                  : `${onShift.length} baristas in`}
-            </button>
-            <button
-              type="button"
-              disabled={pending || !labelPrinter.supported}
-              onClick={() =>
-                startTransition(async () => {
-                  try {
-                    if (labelPrinter.connected) {
-                      await labelPrinter.disconnect();
-                      setMessage("Label printer disconnected.");
-                      return;
-                    }
-                    await labelPrinter.connect();
-                    setMessage("Label printer connected.");
-                  } catch (error) {
-                    setMessage(
-                      error instanceof Error ? error.message : "Label printer error.",
-                    );
-                  }
-                })
-              }
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
-            >
-              {labelPrinter.connected ? "Labels on" : "Connect labels"}
-            </button>
-            <button
-              type="button"
-              disabled={pending || !receiptPrinter.supported}
-              onClick={() =>
-                startTransition(async () => {
-                  try {
-                    if (receiptPrinter.connected) {
-                      await receiptPrinter.disconnect();
-                      setMessage("Receipt printer disconnected.");
-                      return;
-                    }
-                    await receiptPrinter.connect();
-                    setMessage("Receipt printer connected.");
-                  } catch (error) {
-                    setMessage(
-                      error instanceof Error ? error.message : "Receipt printer error.",
-                    );
-                  }
-                })
-              }
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
-            >
-              {receiptPrinter.connected ? "Receipt on" : "Connect receipt"}
-            </button>
             <button
               type="button"
               disabled={pending}
               onClick={() => {
                 if (cart.length > 0) {
                   setMessage("Finish or void the checkout before logging out.");
+                  setMenuOpen(false);
                   return;
                 }
                 startTransition(async () => await logout());
               }}
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800 hover:text-white active:scale-95 disabled:opacity-50"
+              className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-black disabled:opacity-40"
             >
               {pending ? "Logging out..." : "Log out"}
             </button>
           </div>
-        </header>
+        </aside>
 
-        {stylePick ? (
+        {drinkPick ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
             <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
               <button
                 type="button"
-                aria-label="Close drink type"
-                onClick={() => setStylePick(null)}
+                aria-label="Close drink options"
+                onClick={() => setDrinkPick(null)}
                 className="absolute top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black"
               >
                 ×
               </button>
-              <h2 className="text-xl font-semibold tracking-tight">{stylePick.name}</h2>
-              <p className="mt-1 text-sm text-neutral-500">Choose Iced or Hot.</p>
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                {normalizeMenuStyles(stylePick).map((style) => (
+              <h2 className="text-xl font-semibold tracking-tight">{drinkPick.item.name}</h2>
+              {normalizeMenuStyles(drinkPick.item).length > 1 ? (
+                <>
+                  <p className="mt-1 text-sm text-neutral-500">Choose Iced or Hot.</p>
+                  <div className="mt-5 grid grid-cols-2 gap-2">
+                    {normalizeMenuStyles(drinkPick.item).map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...drinkPick, style };
+                          if (normalizeMenuAddons(drinkPick.item).length === 0) {
+                            confirmDrinkPick(next);
+                            return;
+                          }
+                          setDrinkPick(next);
+                        }}
+                        className={`rounded-2xl border px-4 py-4 text-sm font-medium ${
+                          drinkPick.style === style
+                            ? "border-black bg-black text-white"
+                            : "border-neutral-200 hover:border-black hover:bg-black hover:text-white"
+                        }`}
+                      >
+                        {drinkStyleLabel(style)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-neutral-500">Add extras if you want them.</p>
+              )}
+              {normalizeMenuAddons(drinkPick.item).length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-sm text-neutral-500">Add-ons</p>
+                  {normalizeMenuAddons(drinkPick.item).map((addon) => {
+                    const qty = drinkPick.addons[addon.id] ?? 0;
+                    const on = qty > 0;
+                    const canQty = addonAllowsQty(addon);
+                    return (
+                      <button
+                        key={addon.id}
+                        type="button"
+                        onClick={() =>
+                          setDrinkPick({
+                            ...drinkPick,
+                            addons: { ...drinkPick.addons, [addon.id]: on ? 0 : 1 },
+                          })
+                        }
+                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                          on ? "border-black bg-neutral-50" : "border-neutral-200 bg-white"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{addon.name}</p>
+                          <p className="mt-0.5 text-[11px] text-neutral-500">
+                            {qty > 1
+                              ? `x${qty} · +₱${(addon.price || 0) * qty}`
+                              : `+₱${addon.price || 0}${canQty ? " each" : ""}`}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {canQty && on ? (
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <span
+                                role="button"
+                                onClick={() =>
+                                  setDrinkPick({
+                                    ...drinkPick,
+                                    addons: {
+                                      ...drinkPick.addons,
+                                      [addon.id]: Math.max(0, qty - 1),
+                                    },
+                                  })
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 text-sm"
+                              >
+                                −
+                              </span>
+                              <span className="w-4 text-center text-xs font-medium">{qty}</span>
+                              <span
+                                role="button"
+                                onClick={() =>
+                                  setDrinkPick({
+                                    ...drinkPick,
+                                    addons: {
+                                      ...drinkPick.addons,
+                                      [addon.id]: Math.min(9, qty + 1),
+                                    },
+                                  })
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 text-sm"
+                              >
+                                +
+                              </span>
+                            </div>
+                          ) : null}
+                          <span
+                            className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                              on ? "border-black" : "border-neutral-300"
+                            }`}
+                          >
+                            {on ? <span className="h-2.5 w-2.5 rounded-full bg-black" /> : null}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                   <button
-                    key={style}
                     type="button"
-                    onClick={() => {
-                      addItem(stylePick.id, stylePick.name, stylePick.price, style);
-                      setStylePick(null);
-                    }}
-                    className="rounded-2xl border border-neutral-200 px-4 py-4 text-sm font-medium hover:border-black hover:bg-black hover:text-white"
+                    disabled={
+                      normalizeMenuStyles(drinkPick.item).length > 1 && !drinkPick.style
+                    }
+                    onClick={() => confirmDrinkPick(drinkPick)}
+                    className="mt-2 w-full rounded-2xl bg-black px-4 py-3 text-sm font-medium text-white disabled:opacity-40"
                   >
-                    {drinkStyleLabel(style)}
+                    Add to checkout
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -880,26 +1253,6 @@ export function PosClient({
           </div>
         ) : null}
 
-        {!isManager ? (
-          <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-neutral-200 bg-white px-4 py-2">
-            {(["pos", "stock", "restock"] as const).map((panel) => (
-              <button
-                key={panel}
-                type="button"
-                onClick={() => setActivePanel(panel)}
-                aria-current={activePanel === panel ? "page" : undefined}
-                className={`shrink-0 rounded-lg px-4 py-1.5 text-xs font-bold uppercase transition ${
-                  activePanel === panel
-                    ? "bg-black text-white"
-                    : "border border-neutral-200 bg-white text-neutral-700 hover:border-black"
-                }`}
-              >
-                {panel === "pos" ? "Transactions" : panel === "stock" ? "Stock Inventory" : "Restock"}
-              </button>
-            ))}
-          </nav>
-        ) : null}
-
         {/* Void Modal */}
         {voidModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -953,7 +1306,7 @@ export function PosClient({
                         {phDateTimeLabel(selectedVoidOrder.createdAt)} · {selectedVoidOrder.baristaName}
                       </p>
                       <p className="mt-2 text-xs text-neutral-700">
-                        {selectedVoidOrder.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                        {selectedVoidOrder.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                       </p>
                     </>
                   ) : lastTicket ? (
@@ -963,7 +1316,7 @@ export function PosClient({
                         <p className="text-sm font-semibold">{formatMoney(lastTicket.total)}</p>
                       </div>
                       <p className="mt-2 text-xs text-neutral-700">
-                        {lastTicket.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                        {lastTicket.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                       </p>
                     </>
                   ) : null}
@@ -1111,7 +1464,9 @@ export function PosClient({
               tabs={["stock", "restock"]}
               activeTab={activePanel}
               onTabChange={(tab) => {
-                if (tab === "stock" || tab === "restock") setActivePanel(tab);
+                if (tab === "stock" || tab === "restock") {
+                  setActivePanel(tab);
+                }
               }}
               showTabs={false}
             />
@@ -1210,7 +1565,7 @@ export function PosClient({
                             <p className="text-base font-semibold">{formatMoney(order.total)}</p>
                           </div>
                           <p className="mt-2 text-sm text-neutral-700">
-                            {order.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                            {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                           </p>
                           <p className="mt-1 text-xs text-neutral-400">{paymentLabel(order.paymentMethod)}</p>
                           <button
@@ -1252,7 +1607,7 @@ export function PosClient({
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">{order.baristaName}</td>
                               <td className="max-w-[320px] px-4 py-4 text-neutral-700">
-                                {order.items.map((item) => `${item.qty}× ${item.name}`).join(", ")}
+                                {order.items.map((item) => `${item.qty}× ${orderLineListLabel(item)}`).join(", ")}
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
                                 {paymentLabel(order.paymentMethod)}
@@ -1324,7 +1679,10 @@ export function PosClient({
                       {normalizeMenuStyles(item).length > 0 ? (
                         <p className="mt-0.5 text-[10px] text-neutral-400">
                           {normalizeMenuStyles(item).map(drinkStyleLabel).join(" / ")}
+                          {normalizeMenuAddons(item).length > 0 ? " · Add-ons" : ""}
                         </p>
+                      ) : normalizeMenuAddons(item).length > 0 ? (
+                        <p className="mt-0.5 text-[10px] text-neutral-400">Add-ons</p>
                       ) : null}
                       <p className="mt-0.5 text-xs text-neutral-600">
                         {formatMoney(item.price)}
@@ -1374,18 +1732,20 @@ export function PosClient({
               ) : (
                 cart.map((item) => (
                   <li
-                    key={`${item.productId}-${item.style ?? "plain"}`}
+                    key={cartLineKey(item)}
                     className="grid grid-cols-[1fr_auto_auto] items-start gap-x-3 border-b border-neutral-100 py-1.5 last:border-none"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-xs">{item.name}</p>
-                      {item.style ? (
-                        <p className="text-[10px] text-neutral-600">{drinkStyleLabel(item.style)}</p>
+                      <p className="truncate text-xs">{drinkDisplayName(item)}</p>
+                      {orderLineOptionsLabel(item) ? (
+                        <p className="text-[10px] leading-4 text-neutral-600">
+                          {orderLineOptionsLabel(item)}
+                        </p>
                       ) : null}
                     </div>
                     <span className="w-16 text-center text-xs">{item.qty}</span>
                     <span className="w-16 text-right text-xs">
-                      {formatMoney(item.price * item.qty)}
+                      {formatMoney(cartLineUnitPrice(item) * item.qty)}
                     </span>
                   </li>
                 ))
@@ -1521,10 +1881,11 @@ export function PosClient({
                 <button
                   type="button"
                   onClick={printTicket}
+                  disabled={!canPrint}
                   className={`rounded-lg border py-2 text-xs transition ${
-                    labelPrinter.connected || receiptPrinter.connected || availableOrders.length > 0
-                      ? "border-black bg-black text-white"
-                      : "border-neutral-300 hover:border-black"
+                    canPrint
+                      ? "border-black bg-black text-white hover:bg-neutral-800"
+                      : "border-neutral-300 text-neutral-400"
                   }`}
                 >
                   Print
@@ -1572,19 +1933,23 @@ export function PosClient({
                     setPaymentMethod("cash");
                     setPromoId(null);
                     setPromoOpen(false);
+                    setMessage(
+                      `Paid ${formatMoney(result.total ?? 0)}. Tap Print for labels and receipt.`,
+                    );
                     const labelJobs = result.printJobs.filter(
                       (job) => job.type === "cup-label",
                     );
                     const receiptJobs = result.printJobs.filter(
                       (job) => job.type === "customer-receipt",
                     );
-                    const [labelResults, receiptResults] = await Promise.all([
+                    void Promise.all([
                       attemptPrintJobs(labelJobs, savedOrder),
                       attemptPrintJobs(receiptJobs, savedOrder),
-                    ]);
-                    setMessage(
-                      `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
-                    );
+                    ]).then(([labelResults, receiptResults]) => {
+                      setMessage(
+                        `Paid ${formatMoney(result.total ?? 0)} · labels: ${printSummary(labelResults)} · receipt: ${printSummary(receiptResults)} · tap Print for details`,
+                      );
+                    });
                   })
                 }
                 className="relative w-full rounded-xl border-2 border-black py-2.5 text-xs font-medium transition active:scale-[0.99] disabled:opacity-40"
