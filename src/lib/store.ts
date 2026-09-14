@@ -130,19 +130,12 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
 
 const DEFAULT_COSTINGS: CostingItem[] = [
   { id: "cost-coffee-beans", productName: "Coffee Beans", ingredients: [{ name: "Coffee Beans", amount: 1000, unit: "grams", outputCups: 55 }] },
-  { id: "cost-milk", productName: "Milk", ingredients: [{ name: "Milk", amount: 1000, unit: "ml", outputCups: 7.5 }] },
+  { id: "cost-milk", productName: "Milk", ingredients: [{ name: "Milk", amount: 1000, unit: "ml", outputCups: 75 }] },
   { id: "cost-sugar", productName: "Sugar", ingredients: [{ name: "Sugar", amount: 1000, unit: "grams", outputCups: 100 }] },
   { id: "cost-matcha", productName: "Matcha Powder", ingredients: [{ name: "Matcha Powder", amount: 150, unit: "grams", outputCups: 15 }] },
 ];
 
-const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = Object.fromEntries(
-  DEFAULT_MENU.map((item) => [item.id, [
-    { inventoryItemId: "coffee-beans", name: "Coffee Beans", amount: 18, unit: "grams" },
-    { inventoryItemId: "milk", name: "Milk", amount: 133, unit: "ml" },
-    { inventoryItemId: "sugar", name: "Sugar", amount: 10, unit: "grams" },
-    { inventoryItemId: "cups-peta", name: "Peta Cup", amount: 1, unit: "pcs" },
-  ]]),
-);
+const DEFAULT_RECIPES: Record<string, RecipeIngredient[]> = {};
 
 function emptyStore(): StoreData {
   return {
@@ -154,8 +147,9 @@ function emptyStore(): StoreData {
     promotions: DEFAULT_PROMOS.map((item) => ({ ...item })),
     users: DEFAULT_USERS.map((item) => ({ ...item })),
     inventory: DEFAULT_INVENTORY.map((item) => ({ ...item })),
-    recipes: structuredClone(DEFAULT_RECIPES),
-    usageLogs: [],
+  recipes: structuredClone(DEFAULT_RECIPES),
+  recipeCostings: [],
+  usageLogs: [],
     restocks: [],
     costings: structuredClone(DEFAULT_COSTINGS),
     loginActivity: [],
@@ -312,17 +306,67 @@ function normalizeStore(store: StoreData): StoreData {
     }));
     store.inventory = ensureCupTypes(store.inventory);
   }
+  if (!Array.isArray(store.recipeCostings)) {
+    store.recipeCostings = [];
+  } else {
+    store.recipeCostings = store.recipeCostings.filter((costing) => costing && typeof costing.id === "string" && typeof costing.name === "string" && Array.isArray(costing.drinks) && Array.isArray(costing.ingredients));
+  }
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);
+  } else {
+    const menuIds = new Set(store.menu.map((item) => item.id));
+    const isLegacyDefaultRecipe = (ingredients: RecipeIngredient[]) => {
+      const legacyIds = new Set(["coffee-beans", "milk", "sugar", "cups-peta", "cups-daba", "cups-hot", "matcha-powder"]);
+      return ingredients.length > 0 && ingredients.every((ingredient) => legacyIds.has(ingredient.inventoryItemId));
+    };
+    store.recipes = Object.fromEntries(
+      Object.entries(store.recipes)
+        .filter(([recipeKey, ingredients]) => !menuIds.has(recipeKey) && !(Array.isArray(ingredients) && isLegacyDefaultRecipe(ingredients)))
+        .map(([recipeName, ingredients]) => [
+          recipeName,
+          Array.isArray(ingredients)
+            ? ingredients.map((ingredient) =>
+                ingredient.inventoryItemId === "milk" && Number(ingredient.amount) >= 100
+                  ? { ...ingredient, amount: 13.33, unit: "ml" }
+                  : ingredient,
+              )
+            : [],
+        ]),
+    );
   }
   if (!Array.isArray(store.usageLogs)) {
     store.usageLogs = [];
+  } else {
+    const configuredRecipeKeys = new Set(Object.keys(store.recipes));
+    const menuNameById = new Map(store.menu.map((item) => [item.id, item.name]));
+    store.usageLogs = store.usageLogs
+      .filter((usage) => {
+        if (!usage.orderId || !usage.orderItemId) return true;
+        const recipeName = menuNameById.get(usage.orderItemId);
+        return configuredRecipeKeys.has(usage.orderItemId) || (recipeName ? configuredRecipeKeys.has(recipeName) : false);
+      })
+      .map((usage) =>
+        /milk/i.test(usage.itemName) && Number(usage.usedAmount) >= 100
+          ? { ...usage, usedAmount: Number((Number(usage.usedAmount) / 10).toFixed(2)), unit: "ml" }
+          : usage,
+      );
   }
   if (!Array.isArray(store.restocks)) {
     store.restocks = [];
   }
   if (!Array.isArray(store.costings)) {
     store.costings = [];
+  } else {
+    store.costings = store.costings.map((costing) =>
+      /milk/i.test(costing.productName) && costing.ingredients.some((ingredient) => /milk/i.test(ingredient.name))
+        ? {
+            ...costing,
+            ingredients: costing.ingredients.map((ingredient) =>
+              /milk/i.test(ingredient.name) ? { ...ingredient, amount: 1000, unit: "ml", outputCups: 75 } : ingredient,
+            ),
+          }
+        : costing,
+    );
   }
   if (!Array.isArray(store.loginActivity)) {
     store.loginActivity = [];
@@ -453,7 +497,34 @@ async function readStore(): Promise<StoreData> {
   }
 
   const original = data.payload as StoreData;
-  return normalizeStore(original && typeof original === "object" ? original : emptyStore());
+  const store = normalizeStore(original);
+  const originalCostings = Array.isArray(original.costings) ? original.costings : [];
+  const originalRecipes = original.recipes && typeof original.recipes === "object" ? original.recipes : {};
+  const originalUsageLogs = Array.isArray(original.usageLogs) ? original.usageLogs : [];
+  const originalInventory = Array.isArray(original.inventory) ? original.inventory : [];
+  const originalUsers = Array.isArray(original.users) ? original.users : [];
+  const originalMenu = Array.isArray(original.menu) ? original.menu : [];
+  const originalGates = original.loginGates;
+  const menuNeedsStyles = originalMenu.some((item) => {
+    const normalized = normalizeMenuStyles(item);
+    const current = Array.isArray(item.styles) ? item.styles : [];
+    return current.length !== normalized.length || current.some((style, index) => style !== normalized[index]);
+  });
+  if (
+    JSON.stringify(store.costings) !== JSON.stringify(originalCostings) ||
+    JSON.stringify(store.recipes) !== JSON.stringify(originalRecipes) ||
+    JSON.stringify(store.usageLogs) !== JSON.stringify(originalUsageLogs) ||
+    store.inventory.length !== originalInventory.length ||
+    store.inventory.some((item) => originalInventory.find((row) => row.id === item.id)?.name !== item.name) ||
+    store.users.length !== originalUsers.length ||
+    store.users.some((user) => originalUsers.find((item) => item.id === user.id)?.role !== user.role) ||
+    store.loginGates.admin !== originalGates?.admin ||
+    store.loginGates.cashier !== originalGates?.cashier ||
+    menuNeedsStyles
+  ) {
+    await writeStore(store);
+  }
+  return store;
 }
 
 async function writeStore(store: StoreData): Promise<void> {

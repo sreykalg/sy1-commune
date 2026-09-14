@@ -138,6 +138,8 @@ export async function saveAdminData(data: {
   inventory?: StoreData["inventory"];
   restocks?: StoreData["restocks"];
   costings?: StoreData["costings"];
+  recipes?: StoreData["recipes"];
+  recipeCostings?: StoreData["recipeCostings"];
   usageLogs?: StoreData["usageLogs"];
   orders?: StoreData["orders"];
 }) {
@@ -146,6 +148,8 @@ export async function saveAdminData(data: {
     if (data.inventory) store.inventory = data.inventory;
     if (data.restocks) store.restocks = data.restocks;
     if (data.costings) store.costings = data.costings;
+    if (data.recipes) store.recipes = data.recipes;
+    if (data.recipeCostings) store.recipeCostings = data.recipeCostings;
     if (data.usageLogs) store.usageLogs = data.usageLogs;
     if (data.orders) store.orders = data.orders;
   });
@@ -245,10 +249,11 @@ export async function createOrder(
     const requestedStock = new Map<string, number>();
     for (const line of priced) {
       for (const ingredient of ingredientsForOrderLine(store, line)) {
+        const normalize = (value: string) => value.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
         const inventory = store.inventory.find(
           (item) =>
             item.id === ingredient.inventoryItemId ||
-            item.name.toLowerCase() === ingredient.name.toLowerCase(),
+            normalize(item.name) === normalize(ingredient.name),
         );
         if (inventory) {
           requestedStock.set(
@@ -302,8 +307,9 @@ export async function createOrder(
       const ingredients = ingredientsForOrderLine(store, line);
       for (const ingredient of ingredients) {
         const amount = roundQty(ingredient.amount * line.qty);
+        const normalize = (value: string) => value.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
         const inventory = store.inventory.find((item) =>
-          item.id === ingredient.inventoryItemId || item.name.toLowerCase() === ingredient.name.toLowerCase(),
+          item.id === ingredient.inventoryItemId || normalize(item.name) === normalize(ingredient.name),
         );
         if (!inventory) continue;
         inventory.stock = roundQty(Math.max(0, inventory.stock - amount));

@@ -119,7 +119,11 @@ export type InventoryItem = {
   unit: string;
   cost: number;
   stock: number;
+  openingStock?: number;
   maxStock: number;
+  purchaseUnitSize?: number;
+  cupUsageAmount?: number;
+  cupsMake?: number;
 };
 
 export type RecipeIngredient = {
@@ -127,6 +131,13 @@ export type RecipeIngredient = {
   name: string;
   amount: number;
   unit: string;
+};
+
+export type RecipeCosting = {
+  id: string;
+  name: string;
+  drinks: string[];
+  ingredients: RecipeIngredient[];
 };
 
 export type UsageLog = {
@@ -209,6 +220,7 @@ export type StoreData = {
   users: StaffUser[];
   inventory: InventoryItem[];
   recipes: Record<string, RecipeIngredient[]>;
+  recipeCostings: RecipeCosting[];
   usageLogs: UsageLog[];
   restocks: RestockRecord[];
   costings: CostingItem[];

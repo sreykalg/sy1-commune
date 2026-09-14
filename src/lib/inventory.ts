@@ -152,13 +152,17 @@ export function cupsFromQuantity(
   return quantity / perCup;
 }
 
+function comparableItemName(value: string) {
+  return value.trim().toLowerCase().replace(/(.)\1+/g, "$1");
+}
+
 export function findCostingForItem(costings: CostingItem[], name: string): CostingItem | undefined {
-  const needle = name.trim().toLowerCase();
+  const needle = comparableItemName(name);
   if (!needle) return undefined;
   return costings.find((costing) => {
     if (costing.productName.toLowerCase() === needle) return true;
     return costing.ingredients.some((ing) => {
-      const ingName = ing.name.trim().toLowerCase();
+      const ingName = comparableItemName(ing.name);
       return ingName === needle || ingName.includes(needle) || needle.includes(ingName);
     });
   });
@@ -170,9 +174,9 @@ export function costingIngredientForItem(
 ): CostingIngredient | undefined {
   const costing = findCostingForItem(costings, name);
   if (!costing) return undefined;
-  const needle = name.trim().toLowerCase();
+  const needle = comparableItemName(name);
   return (
-    costing.ingredients.find((ing) => ing.name.trim().toLowerCase() === needle) ??
+    costing.ingredients.find((ing) => comparableItemName(ing.name) === needle) ??
     costing.ingredients[0]
   );
 }
@@ -254,75 +258,35 @@ function cupForDrink(
   return peta ?? daba ?? hot;
 }
 
-export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
-  const menuItem = store.menu.find((item) => item.id === line.productId);
-  const name = menuItem?.name || line.name;
-  const category = menuItem?.category || "";
-  const ingredients: RecipeIngredient[] = [];
+export function ingredientsForOrderLine(
+  store: Partial<Pick<StoreData, "menu" | "recipes" | "recipeCostings">>,
+  line: OrderItem,
+): RecipeIngredient[] {
+  const menuItem = (store.menu ?? []).find((item) => item.id === line.productId);
+  const names = [line.name, menuItem?.name].filter((value): value is string => Boolean(value));
+  const normalizeDrink = (value: string) => value
+    .trim()
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[·–—-]?\s*(hot|iced)\s*$/i, "")
+    .replace(/\s*\((hot|iced)\)\s*$/i, "")
+    .replace(/\s+/g, " ");
+  const normalizedNames = new Set(names.map(normalizeDrink));
+  const matchesDrink = (drink: string) => {
+    const normalizedDrink = normalizeDrink(drink);
+    return drink === line.productId || normalizedNames.has(normalizedDrink);
+  };
+  const recipeCostings = store.recipeCostings ?? [];
+  const costing = [...recipeCostings].reverse().find((entry) => entry.drinks.some(matchesDrink));
 
-  function addInventory(item: InventoryItem | undefined, amount: number, unit?: string) {
-    if (!item || amount <= 0) return;
-    ingredients.push({
-      inventoryItemId: item.id,
-      name: item.name,
-      amount,
-      unit: unit || item.unit || "pcs",
-    });
-  }
+  // When costings exist, they are the only source of truth. Never fall back to a stale recipe,
+  // because that can deduct the wrong cup and omit ingredients such as milk.
+  const recipe = recipeCostings.length > 0
+    ? costing?.ingredients ?? []
+    : (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1] ?? [];
 
-  function addByCosting(item: InventoryItem | undefined, fallbackPerCup: number) {
-    if (!item) return;
-    const recipe = costingIngredientForItem(store.costings, item.name);
-    addInventory(item, recipe ? perCupAmount(recipe) : fallbackPerCup, recipe?.unit || item.unit);
-  }
+  return recipe.filter((ingredient) => Number(ingredient.amount) > 0);
 
-  const beans = findInventory(
-    store.inventory,
-    (item) => item.id === "coffee-beans" || /coffee bean/i.test(item.name),
-  );
-  const milk = findInventory(store.inventory, (item) => item.id === "milk" || /^milk$/i.test(item.name));
-  const matcha = findInventory(
-    store.inventory,
-    (item) => item.id === "matcha-powder" || /matcha/i.test(item.name),
-  );
-  const sugar = findInventory(
-    store.inventory,
-    (item) => item.id === "sugar" || /^sugar$/i.test(item.name),
-  );
-  const peta = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-peta");
-  const daba = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-daba");
-  const hot = findInventory(store.inventory, (item) => cupSkuForItem(item)?.id === "cups-hot");
-
-  if (isMatchaDrink(name, category)) {
-    addByCosting(matcha, 10);
-    addByCosting(sugar, 10);
-  } else if (isCoffeeCategory(category)) {
-    addByCosting(beans, 18);
-    addByCosting(milk, 1000 / 7.5);
-    addByCosting(sugar, 10);
-  } else if (isMilkDrink(category)) {
-    addByCosting(milk, 1000 / 7.5);
-    addByCosting(sugar, 10);
-  }
-
-  if (isDrinkCategory(category)) {
-    addInventory(cupForDrink(category, styleFromLine(line), peta, daba, hot), 1, "pcs");
-  }
-
-  const addonCatalog = normalizeMenuAddons(menuItem);
-  for (const selected of line.addons ?? []) {
-    const qty = Math.max(1, Math.floor(Number(selected.qty) || 1));
-    const spec = addonCatalog.find((addon) => addon.id === selected.id);
-    const inventory = findInventory(store.inventory, (item) => {
-      if (spec?.inventoryItemId) return item.id === spec.inventoryItemId;
-      return namesMatch(item.name, selected.name) || namesMatch(item.name, spec?.name ?? "");
-    });
-    if (!inventory) continue;
-    const recipe = costingIngredientForItem(store.costings, inventory.name);
-    addInventory(inventory, (recipe ? perCupAmount(recipe) : 1) * qty, recipe?.unit || inventory.unit);
-  }
-
-  return ingredients;
 }
 
 export function recipeForMenuPreview(store: StoreData, item: MenuItem): RecipeIngredient[] {
