@@ -279,12 +279,8 @@ export function SalePurchaseTransactions({
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
 
   useEffect(() => {
-    const saved = store.recipeCostings ?? [];
-    if (saved.length > 0) {
-      setRecipeCostings(saved);
-    } else {
-      setRecipeCostings([]);
-    }
+    const saved = store.recipeCostings;
+    if (saved && saved.length > 0) setRecipeCostings(saved);
   }, [store.recipeCostings]);
 
   function updateCosting(index: number, patch: Partial<Costing>) {
@@ -311,10 +307,9 @@ export function SalePurchaseTransactions({
     recipeCostings.forEach((costing) => costing.drinks.forEach((drink) => {
       recipes[drink] = costing.ingredients.filter((ingredient) => ingredient.name.trim() && Number(ingredient.amount) > 0);
     }));
-    await saveAdminData({
-      recipes,
-      recipeCostings: recipeCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` })),
-    });
+    const savedCostings = recipeCostings.map((costing, index) => ({ ...costing, id: costing.id || `recipe-costing-${Date.now()}-${index}` }));
+    setRecipeCostings(savedCostings);
+    await saveAdminData({ recipes, recipeCostings: savedCostings });
   }
 
   const [filterType, setFilterType] = useState("All");
