@@ -10,7 +10,7 @@ function inventoryUsageMetrics(itemName: string, unit: string) {
     return { perUnit: `1,000 ${unit}`, perPiece: `9 ${unit}` };
   }
   if (normalized.includes("milk")) {
-    return { perUnit: "893.33 mL", perPiece: "0.893 pc" };
+    return { perUnit: "893.33 mL", perPiece: "13.33 mL" };
   }
   if (normalized.includes("matcha")) {
     return { perUnit: `150 ${unit}`, perPiece: `10 ${unit}` };
