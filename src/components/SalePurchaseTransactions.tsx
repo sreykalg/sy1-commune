@@ -280,7 +280,7 @@ export function SalePurchaseTransactions({
 
   useEffect(() => {
     setRecipeRows(recipeMap[recipeDrink] ?? []);
-  }, [recipeDrink, store.recipes]);
+  }, [recipeDrink]);
 
   function updateRecipeRow(index: number, patch: Partial<RecipeIngredient>) {
     setRecipeRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
