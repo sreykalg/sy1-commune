@@ -4,15 +4,9 @@ import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOr
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
 
-function inventoryUsagePerPiece(itemName: string, used: number) {
-  const normalized = itemName.trim().toLowerCase();
-  const unitSize = normalized.includes("milk") || normalized.includes("coffee bean")
-    ? 1000
-    : normalized.includes("matcha")
-      ? 150
-      : null;
-
-  return unitSize === null ? "—" : `${(used / unitSize).toFixed(2)} pc`;
+function inventoryUsagePerPiece(item: StockItem, used: number) {
+  const unitSize = Number(item.purchaseUnitSize);
+  return unitSize > 0 ? `${(used / unitSize).toFixed(2)} pc` : "—";
 }
 
 export type InventoryTab = "transactions" | "stock" | "restock" | "costing" | "used" | "recipes";
@@ -155,6 +149,7 @@ type StockItem = {
   category: string;
   stock: number;
   unit: string;
+  purchaseUnitSize?: number;
 };
 
 type RestockRecord = {
@@ -262,6 +257,7 @@ export function SalePurchaseTransactions({
   const [stockCategory, setStockCategory] = useState("");
   const [stockQty, setStockQty] = useState("");
   const [stockUnit, setStockUnit] = useState("grams");
+  const [stockPurchaseUnitSize, setStockPurchaseUnitSize] = useState("");
 
   function resetStockForm() {
     setEditStockId(null);
@@ -269,6 +265,7 @@ export function SalePurchaseTransactions({
     setStockCategory("");
     setStockQty("");
     setStockUnit("grams");
+    setStockPurchaseUnitSize("");
   }
 
   const [editRestockId, setEditRestockId] = useState<string | null>(null);
@@ -523,10 +520,12 @@ export function SalePurchaseTransactions({
     const qty = Number(stockQty);
     if (!Number.isFinite(qty) || qty < 0) return;
     const unit = stockUnit.trim() || "pcs";
+    const purchaseUnitSize = stockPurchaseUnitSize.trim() ? Number(stockPurchaseUnitSize) : undefined;
+    if (purchaseUnitSize !== undefined && (!Number.isFinite(purchaseUnitSize) || purchaseUnitSize <= 0)) return;
 
     if (editStockId) {
       const nextStocks = stocks.map((s) =>
-        s.id === editStockId ? { ...s, name: stockName, category: stockCategory, stock: qty, unit } : s,
+        s.id === editStockId ? { ...s, name: stockName, category: stockCategory, stock: qty, unit, purchaseUnitSize } : s,
       );
       setStocks(nextStocks);
       await persistInventory(nextStocks);
@@ -538,6 +537,7 @@ export function SalePurchaseTransactions({
         category: stockCategory,
         stock: qty,
         unit,
+        purchaseUnitSize,
       };
       const nextStocks = [...stocks, newItem];
       const newRestock: RestockRecord = {
@@ -561,6 +561,7 @@ export function SalePurchaseTransactions({
     setStockCategory(s.category);
     setStockQty(s.stock.toString());
     setStockUnit(s.unit || "pcs");
+    setStockPurchaseUnitSize(s.purchaseUnitSize?.toString() ?? "");
   };
 
   const handleDeleteStock = async (id: string) => {
@@ -907,6 +908,11 @@ export function SalePurchaseTransactions({
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Unit</label>
                 <input type="text" placeholder="grams, ml, pcs" value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">1 purchase unit equals</label>
+                <input type="number" min="0" step="any" placeholder="e.g. 1000" value={stockPurchaseUnitSize} onChange={(e) => setStockPurchaseUnitSize(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
+                <p className="mt-1 text-[10px] text-neutral-500">Optional conversion to the stock unit</p>
+              </div>
               <div className="flex gap-2">
                 <button type="submit" className="flex-1 bg-black text-white px-4 py-1.5 rounded text-sm font-medium">{editStockId ? "Update" : "Add"}</button>
                 <button type="button" onClick={resetStockForm} className="border border-neutral-300 bg-white text-black hover:bg-neutral-100 px-4 py-1.5 rounded text-sm font-medium">Clear</button>
@@ -962,7 +968,7 @@ export function SalePurchaseTransactions({
                           className="w-24 bg-white border border-neutral-400 rounded px-2 py-1 text-right text-red-600 font-medium"
                         />
                       </td>
-                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s.name, Number(used))}</td>
+                      <td className="p-3 border-r border-neutral-200 text-right text-neutral-600">{inventoryUsagePerPiece(s, Number(used))}</td>
                       <td className="p-2 border-r border-neutral-200 text-right font-bold">
                         <input
                           aria-label={`Remaining stock for ${s.name}`}
