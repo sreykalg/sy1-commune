@@ -291,9 +291,18 @@ function normalizeStore(store: StoreData): StoreData {
     store.recipes = structuredClone(DEFAULT_RECIPES);
   } else {
     const menuIds = new Set(store.menu.map((item) => item.id));
+    const isLegacyDefaultRecipe = (ingredients: RecipeIngredient[]) => {
+      const legacy = ingredients.map((ingredient) => `${ingredient.inventoryItemId}:${ingredient.amount}:${ingredient.unit}`).sort();
+      return legacy.join("|") === [
+        "coffee-beans:18:grams",
+        "cups-peta:1:pcs",
+        "milk:13.33:ml",
+        "sugar:10:grams",
+      ].sort().join("|");
+    };
     store.recipes = Object.fromEntries(
       Object.entries(store.recipes)
-        .filter(([recipeKey]) => !menuIds.has(recipeKey))
+        .filter(([recipeKey, ingredients]) => !menuIds.has(recipeKey) && !(Array.isArray(ingredients) && isLegacyDefaultRecipe(ingredients)))
         .map(([recipeName, ingredients]) => [
           recipeName,
           Array.isArray(ingredients)
