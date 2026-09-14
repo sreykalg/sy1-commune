@@ -247,10 +247,11 @@ export async function createOrder(
     const requestedStock = new Map<string, number>();
     for (const line of priced) {
       for (const ingredient of ingredientsForOrderLine(store, line)) {
+        const normalize = (value: string) => value.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
         const inventory = store.inventory.find(
           (item) =>
             item.id === ingredient.inventoryItemId ||
-            item.name.toLowerCase() === ingredient.name.toLowerCase(),
+            normalize(item.name) === normalize(ingredient.name),
         );
         if (inventory) {
           requestedStock.set(

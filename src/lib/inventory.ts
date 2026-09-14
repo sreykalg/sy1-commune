@@ -256,11 +256,17 @@ function cupForDrink(
 export function ingredientsForOrderLine(store: StoreData, line: OrderItem): RecipeIngredient[] {
   const menuItem = store.menu.find((item) => item.id === line.productId);
   const names = [line.name, menuItem?.name].filter((value): value is string => Boolean(value));
-  const normalizeDrink = (value: string) => value.trim().toLowerCase().replace(/[·–—-]\s*(hot|iced)\s*$/i, "").replace(/\s+/g, " ");
+  const normalizeDrink = (value: string) => value
+    .trim()
+    .toLowerCase()
+    .replace(/[·–—-]\s*(hot|iced)\s*$/i, "")
+    .replace(/\s*\((hot|iced)\)\s*$/i, "")
+    .replace(/\s+/g, " ");
   const normalizedNames = new Set(names.map(normalizeDrink));
   const matchesDrink = (drink: string) => drink === line.productId || normalizedNames.has(normalizeDrink(drink));
-  const savedRecipe = Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
-  const costingRecipe = (store.recipeCostings ?? []).find((costing) => costing.drinks.some(matchesDrink))?.ingredients;
+  const costing = (store.recipeCostings ?? []).find((entry) => entry.drinks.some(matchesDrink));
+  const costingRecipe = costing?.ingredients;
+  const savedRecipe = (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1];
 
   // Costing assignment is the source of truth. Only the costing explicitly assigned to this item is used.
   const recipe = costingRecipe ?? savedRecipe ?? [];
