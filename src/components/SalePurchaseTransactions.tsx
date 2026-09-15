@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
 import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
-import { orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
+import { isFoodOrPastry, orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
 import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
 
 function inventoryUsagePerPiece(item: StockItem, used: number) {
@@ -357,10 +357,10 @@ export function SalePurchaseTransactions({
   const recipeMap = store.recipes ?? {};
   type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[] };
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
-  const [expandedCostings, setExpandedCostings] = useState<Set<number>>(new Set());
-  const [drinkSearch, setDrinkSearch] = useState("");
-  const [drinkCategory, setDrinkCategory] = useState("All");
+  const [editingCostingIndex, setEditingCostingIndex] = useState<number | null>(null);
+  const [savingRecipes, setSavingRecipes] = useState(false);
   const [otherDrinkName, setOtherDrinkName] = useState("");
+  const [showOtherDrink, setShowOtherDrink] = useState(false);
   const hasHydratedCostings = useRef(false);
 
   useEffect(() => {
@@ -392,6 +392,33 @@ export function SalePurchaseTransactions({
     }));
   }
 
+  const menuDrinks = useMemo(
+    () => recipeMenu.filter((drink) => !isFoodOrPastry(drink.category)),
+    [recipeMenu],
+  );
+  const assignedDrinkNames = useMemo(
+    () => new Set(recipeCostings.flatMap((costing) => costing.drinks.map((name) => name.trim().toLowerCase()))),
+    [recipeCostings],
+  );
+  const unassignedMenuDrinks = useMemo(
+    () => menuDrinks.filter((drink) => !assignedDrinkNames.has(drink.name.trim().toLowerCase())),
+    [assignedDrinkNames, menuDrinks],
+  );
+
+  function addDrinkToCosting(index: number, drink: string) {
+    const name = drink.trim();
+    if (!name) return;
+    setRecipeCostings((rows) =>
+      rows.map((row, rowIndex) => {
+        if (rowIndex === index) {
+          if (row.drinks.some((entry) => entry.trim().toLowerCase() === name.toLowerCase())) return row;
+          return { ...row, drinks: [...row.drinks, name] };
+        }
+        return { ...row, drinks: row.drinks.filter((entry) => entry.trim().toLowerCase() !== name.toLowerCase()) };
+      }),
+    );
+  }
+
   function addOtherDrink(index: number) {
     const drink = otherDrinkName.trim();
     if (!drink) return;
@@ -399,6 +426,36 @@ export function SalePurchaseTransactions({
     if (alreadyAssigned) return;
     setRecipeCostings((rows) => rows.map((row, rowIndex) => rowIndex === index && !row.drinks.some((name) => name.toLowerCase() === drink.toLowerCase()) ? { ...row, drinks: [...row.drinks, drink] } : row));
     setOtherDrinkName("");
+    setShowOtherDrink(false);
+  }
+
+  function openCosting(index: number | null) {
+    setEditingCostingIndex(index);
+    setShowOtherDrink(false);
+    setOtherDrinkName("");
+  }
+
+  function attachUnassignedDrink(drink: string) {
+    if (editingCostingIndex !== null) {
+      addDrinkToCosting(editingCostingIndex, drink);
+      return;
+    }
+    if (recipeCostings.length > 0) {
+      setEditingCostingIndex(0);
+      addDrinkToCosting(0, drink);
+      return;
+    }
+    setRecipeCostings([{ name: "", drinks: [drink], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] }]);
+    setEditingCostingIndex(0);
+  }
+
+  async function handleSaveRecipes() {
+    setSavingRecipes(true);
+    try {
+      await saveCostings();
+    } finally {
+      setSavingRecipes(false);
+    }
   }
 
   async function saveCostings(nextCostings = recipeCostings) {
@@ -435,7 +492,6 @@ export function SalePurchaseTransactions({
   }
   setStocks(nextStocks);
   setRecipeCostings(savedCostings);
-  setExpandedCostings(new Set());
   await persistInventory(nextStocks);
   await saveAdminData({ recipes, recipeCostings: savedCostings });
   }
@@ -848,13 +904,10 @@ export function SalePurchaseTransactions({
   const deleteRecipeCosting = async (index: number) => {
     const nextCostings = recipeCostings.filter((_, rowIndex) => rowIndex !== index);
     setRecipeCostings(nextCostings);
-    setExpandedCostings((current) => {
-      const next = new Set<number>();
-      current.forEach((value) => {
-        if (value < index) next.add(value);
-        if (value > index) next.add(value - 1);
-      });
-      return next;
+    setEditingCostingIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
     });
     await saveCostings(nextCostings);
   };
@@ -989,27 +1042,239 @@ export function SalePurchaseTransactions({
       )}
 
       {activeTab === "recipes" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border border-neutral-400 bg-neutral-50 p-4"><div><h3 className="text-xs font-bold uppercase text-neutral-700">Costing</h3><p className="mt-1 text-xs text-neutral-500">One costing contains all of its ingredients.</p></div><button type="button" onClick={() => { setRecipeCostings((rows) => { setExpandedCostings(new Set([rows.length])); return [...rows, { name: "", drinks: [], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] }]; }); }} className="rounded bg-black px-4 py-2 text-sm font-medium text-white">Add Costing</button></div>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-neutral-900">Costing</h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextIndex = recipeCostings.length;
+                  setRecipeCostings((rows) => [
+                    ...rows,
+                    { name: "", drinks: [], ingredients: [{ inventoryItemId: "", name: "", amount: 0, unit: "ml" }] },
+                  ]);
+                  openCosting(nextIndex);
+                }}
+                className="rounded border border-neutral-400 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-100"
+              >
+                Add recipe
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveRecipes()}
+                disabled={savingRecipes}
+                className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {savingRecipes ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {unassignedMenuDrinks.length > 0 && editingCostingIndex === null ? (
+            <div className="rounded-lg border border-neutral-300 bg-neutral-50 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Needs a recipe</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {unassignedMenuDrinks.map((drink) => (
+                  <button
+                    key={drink.id}
+                    type="button"
+                    onClick={() => attachUnassignedDrink(drink.name)}
+                    className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs text-neutral-700 hover:border-neutral-900"
+                  >
+                    {drink.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {recipeCostings.map((costing, costingIndex) => {
-            const assignedElsewhere = new Set(recipeCostings.flatMap((other, otherIndex) => otherIndex === costingIndex ? [] : other.drinks));
-            const categories = Array.from(new Set(recipeMenu.map((drink) => drink.category).filter(Boolean)));
-            const visibleDrinks = recipeMenu.filter((drink) => {
-              const matchesSearch = drink.name.toLowerCase().includes(drinkSearch.toLowerCase());
-              const matchesCategory = drinkCategory === "All" || drink.category === drinkCategory;
-              return matchesSearch && matchesCategory;
-            });
-            const isExpanded = expandedCostings.has(costingIndex);
-            return <section key={costingIndex} className="overflow-hidden rounded-lg border border-neutral-400 bg-white">
-              <div className="flex items-center justify-between border-b border-neutral-300 bg-neutral-50 px-4 py-3"><input value={costing.name} onChange={(event) => updateCosting(costingIndex, { name: event.target.value })} placeholder="Costing name" className="min-w-0 flex-1 bg-transparent text-lg font-medium text-neutral-900 outline-none" /><div className="flex items-center gap-4"><button type="button" onClick={() => setExpandedCostings((current) => { const next = new Set(current); next.has(costingIndex) ? next.delete(costingIndex) : next.add(costingIndex); return next; })} className="text-xs font-medium text-neutral-600">{isExpanded ? "Minimize" : "Expand"}</button><button type="button" aria-label={`Delete ${costing.name || "costing"}`} title="Delete costing" onClick={() => void deleteRecipeCosting(costingIndex)} className="rounded p-1 text-neutral-500 transition hover:bg-red-50 hover:text-red-600"><TrashIcon /></button></div></div>
-              {isExpanded && <>
-              <div className="border-b border-neutral-300 px-4 py-3"><div className="mb-2 text-[11px] font-bold uppercase text-neutral-700">Add item</div><div className="mb-2 flex flex-wrap gap-2"><input value={drinkSearch} onChange={(event) => setDrinkSearch(event.target.value)} placeholder="Search item..." className="min-w-52 flex-1 rounded border border-neutral-300 px-3 py-2 text-sm" /><select value={drinkCategory} onChange={(event) => setDrinkCategory(event.target.value)} className="rounded border border-neutral-300 bg-white px-3 py-2 text-sm"><option value="All">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></div><div className="mb-2 flex gap-2"><input value={otherDrinkName} onChange={(event) => setOtherDrinkName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); addOtherDrink(costingIndex); } }} placeholder="Add item name" className="w-full flex-1 rounded border border-neutral-300 px-3 py-2 text-sm" /><button type="button" onClick={() => addOtherDrink(costingIndex)} className="shrink-0 rounded border border-neutral-400 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100">Add item</button></div><div className="grid max-h-32 grid-cols-2 gap-1 overflow-y-auto rounded border border-neutral-300 p-2 sm:grid-cols-3">{visibleDrinks.map((drink) => <label key={drink.id} className={`flex items-center gap-2 rounded px-2 py-1 text-xs ${assignedElsewhere.has(drink.name) && !costing.drinks.includes(drink.name) ? "text-neutral-400" : ""}`}><input type="checkbox" checked={costing.drinks.includes(drink.name)} disabled={assignedElsewhere.has(drink.name) && !costing.drinks.includes(drink.name)} onChange={() => toggleCostingDrink(costingIndex, drink.name)} />{drink.name}</label>)}{costing.drinks.filter((drink) => !recipeMenu.some((menuDrink) => menuDrink.name === drink)).map((drink) => <label key={drink} className="flex items-center gap-2 rounded bg-neutral-50 px-2 py-1 text-xs"><input type="checkbox" checked onChange={() => toggleCostingDrink(costingIndex, drink)} />{drink} (Other)</label>)}{visibleDrinks.length === 0 && costing.drinks.filter((drink) => !recipeMenu.some((menuDrink) => menuDrink.name === drink)).length === 0 && <span className="col-span-full p-2 text-xs text-neutral-500">No drinks found.</span>}</div></div>
-              <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="bg-black text-xs font-semibold text-white"><th className="p-3">Ingredient</th><th className="p-3">Amount per cup</th><th className="p-3">Unit</th><th className="p-3 text-center">Actions</th></tr></thead><tbody>{costing.ingredients.map((ingredient, ingredientIndex) => <tr key={ingredientIndex} className="border-b border-neutral-200"><td className="p-2"><select value={ingredient.inventoryItemId} onChange={(event) => { const item = store.inventory.find((stock) => stock.id === event.target.value); updateCostingIngredient(costingIndex, ingredientIndex, { inventoryItemId: event.target.value, name: item?.name ?? ingredient.name, unit: item?.unit ?? ingredient.unit }); }} className="w-full rounded border border-neutral-300 px-2 py-1.5"><option value="">Select ingredient</option>{store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="other">Other</option></select>{ingredient.inventoryItemId === "other" && <input value={ingredient.name} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { name: event.target.value })} placeholder="Type ingredient name" className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5" />}</td><td className="p-2"><input type="number" min="0" step="0.01" value={ingredient.amount === 0 ? "" : ingredient.amount} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { amount: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td><td className="p-2"><input value={ingredient.unit} onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { unit: event.target.value })} className="w-full rounded border border-neutral-300 px-2 py-1.5" /></td><td className="p-2 text-center"><button type="button" onClick={() => updateCosting(costingIndex, { ingredients: costing.ingredients.filter((_, rowIndex) => rowIndex !== ingredientIndex) })} className="text-xs font-medium text-red-600">Remove</button></td></tr>)}</tbody></table></div>
-              <div className="flex justify-between p-3"><button type="button" onClick={() => updateCosting(costingIndex, { ingredients: [...costing.ingredients, { inventoryItemId: "", name: "", amount: 0, unit: "ml" }] })} className="text-xs font-medium text-neutral-700">+ Add ingredient</button><button type="button" onClick={() => void deleteRecipeCosting(costingIndex)} className="text-xs font-medium text-red-600">Delete costing</button></div>
-              </>}
-            </section>;
+            const isEditing = editingCostingIndex === costingIndex;
+            return (
+              <section key={costing.id ?? costingIndex} className={`overflow-hidden rounded-lg border bg-white ${isEditing ? "border-neutral-900" : "border-neutral-300"}`}>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  {isEditing ? (
+                    <input
+                      value={costing.name}
+                      onChange={(event) => updateCosting(costingIndex, { name: event.target.value })}
+                      placeholder="Recipe name"
+                      className="min-w-0 flex-1 bg-transparent text-base font-medium text-neutral-900 outline-none"
+                    />
+                  ) : (
+                    <button type="button" onClick={() => openCosting(costingIndex)} className="min-w-0 flex-1 text-left text-base font-medium text-neutral-900">
+                      {costing.name.trim() || "Untitled recipe"}
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openCosting(isEditing ? null : costingIndex)}
+                      className="text-xs font-medium text-neutral-600"
+                    >
+                      {isEditing ? "Close" : "Edit"}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${costing.name || "recipe"}`}
+                      title="Delete recipe"
+                      onClick={() => void deleteRecipeCosting(costingIndex)}
+                      className="rounded p-1 text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <div className="grid border-t border-neutral-200 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+                    <div className="border-b border-neutral-200 p-4 lg:border-b-0 lg:border-r">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Drinks</p>
+                      <ul className="mt-2 divide-y divide-neutral-100">
+                        {costing.drinks.length === 0 ? (
+                          <li className="py-2 text-sm text-neutral-500">Tap a drink below to add it.</li>
+                        ) : (
+                          costing.drinks.map((drink) => (
+                            <li key={drink} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                              <span className="min-w-0 truncate">{drink}</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleCostingDrink(costingIndex, drink)}
+                                className="shrink-0 text-xs text-neutral-400 hover:text-red-600"
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                      {unassignedMenuDrinks.length > 0 ? (
+                        <div className="mt-4">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Add</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {unassignedMenuDrinks.map((drink) => (
+                              <button
+                                key={drink.id}
+                                type="button"
+                                onClick={() => addDrinkToCosting(costingIndex, drink.name)}
+                                className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+                              >
+                                + {drink.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {showOtherDrink ? (
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            value={otherDrinkName}
+                            onChange={(event) => setOtherDrinkName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+                                event.preventDefault();
+                                addOtherDrink(costingIndex);
+                              }
+                            }}
+                            placeholder="Drink name"
+                            className="min-w-0 flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addOtherDrink(costingIndex)}
+                            className="rounded border border-neutral-400 px-3 py-1.5 text-sm font-medium text-neutral-700"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowOtherDrink(true)}
+                          className="mt-3 text-xs text-neutral-400 hover:text-neutral-700"
+                        >
+                          Not on the menu
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Ingredients for 1 cup</p>
+                      <div className="mt-2 space-y-2">
+                        {costing.ingredients.map((ingredient, ingredientIndex) => (
+                          <div key={ingredientIndex} className="grid grid-cols-[minmax(0,1fr)_5.5rem_4.5rem_auto] items-start gap-2">
+                            <div>
+                              <select
+                                value={ingredient.inventoryItemId}
+                                onChange={(event) => {
+                                  const item = store.inventory.find((stock) => stock.id === event.target.value);
+                                  updateCostingIngredient(costingIndex, ingredientIndex, {
+                                    inventoryItemId: event.target.value,
+                                    name: item?.name ?? ingredient.name,
+                                    unit: item?.unit ?? ingredient.unit,
+                                  });
+                                }}
+                                className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                              >
+                                <option value="">Select ingredient</option>
+                                {store.inventory.map((item) => (
+                                  <option key={item.id} value={item.id}>{item.name}</option>
+                                ))}
+                                <option value="other">Other</option>
+                              </select>
+                              {ingredient.inventoryItemId === "other" ? (
+                                <input
+                                  value={ingredient.name}
+                                  onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { name: event.target.value })}
+                                  placeholder="Ingredient name"
+                                  className="mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                                />
+                              ) : null}
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Qty"
+                              value={ingredient.amount === 0 ? "" : ingredient.amount}
+                              onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { amount: event.target.value === "" ? 0 : Number(event.target.value) })}
+                              className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            />
+                            <input
+                              placeholder="Unit"
+                              value={ingredient.unit}
+                              onChange={(event) => updateCostingIngredient(costingIndex, ingredientIndex, { unit: event.target.value })}
+                              className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateCosting(costingIndex, { ingredients: costing.ingredients.filter((_, rowIndex) => rowIndex !== ingredientIndex) })}
+                              className="mt-1.5 text-xs font-medium text-red-600"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateCosting(costingIndex, { ingredients: [...costing.ingredients, { inventoryItemId: "", name: "", amount: 0, unit: "ml" }] })}
+                        className="mt-3 text-xs font-medium text-neutral-700"
+                      >
+                        + Add ingredient
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
           })}
-          {recipeCostings.length === 0 && <div className="rounded-lg border border-neutral-400 bg-white p-8 text-center text-sm text-neutral-500">No costings added.</div>}<div className="flex justify-end"><button type="button" onClick={() => void saveCostings()} className="rounded bg-black px-5 py-2 text-sm font-medium text-white">Save Costings</button></div>
+
+          {recipeCostings.length === 0 ? (
+            <div className="rounded-lg border border-neutral-300 bg-white p-8 text-center text-sm text-neutral-500">
+              No recipes yet.
+            </div>
+          ) : null}
         </div>
       )}
 
