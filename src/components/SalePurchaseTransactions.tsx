@@ -1180,45 +1180,38 @@ export function SalePurchaseTransactions({
                           </div>
                         </fieldset>
                       ) : null}
-                      <ul className="mt-2 divide-y divide-neutral-100">
-                        {costing.drinks.length === 0 ? (
-                          <li className="py-2 text-sm text-neutral-500">Tap a drink below to add it.</li>
+                      <div className="mt-4 border-t border-neutral-100 pt-3">
+                        {filteredUnassignedMenuDrinks.length > 0 || menuDrinks.some((drink) => costing.drinks.includes(drink.name)) ? (
+                          <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {menuDrinks
+                              .filter((drink) => {
+                                const query = drinkSearch.trim().toLowerCase();
+                                const matchesSearch = !query || drink.name.toLowerCase().includes(query);
+                                const matchesCategory = selectedDrinkCategories.length === 0 || selectedDrinkCategories.includes(drink.category);
+                                return matchesSearch && matchesCategory;
+                              })
+                              .map((drink) => {
+                                const isChecked = costing.drinks.includes(drink.name);
+                                return (
+                                  <label
+                                    key={drink.id}
+                                    className={`flex min-w-0 items-center gap-2 text-sm ${isChecked ? "text-neutral-900" : "text-neutral-400"}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => toggleCostingDrink(costingIndex, drink.name)}
+                                      className="h-4 w-4 shrink-0 accent-blue-600"
+                                    />
+                                    <span className="truncate">{drink.name}</span>
+                                  </label>
+                                );
+                              })}
+                          </div>
                         ) : (
-                          costing.drinks.map((drink) => (
-                            <li key={drink} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                              <span className="min-w-0 truncate">{drink}</span>
-                              <button
-                                type="button"
-                                onClick={() => toggleCostingDrink(costingIndex, drink)}
-                                className="shrink-0 text-xs text-neutral-400 hover:text-red-600"
-                              >
-                                Remove
-                              </button>
-                            </li>
-                          ))
+                          <p className="text-sm text-neutral-500">No drinks match your filters.</p>
                         )}
-                      </ul>
-                      {unassignedMenuDrinks.length > 0 ? (
-                        <div className="mt-4">
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Add</p>
-                          {filteredUnassignedMenuDrinks.length > 0 ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {filteredUnassignedMenuDrinks.map((drink) => (
-                                <button
-                                  key={drink.id}
-                                  type="button"
-                                  onClick={() => addDrinkToCosting(costingIndex, drink.name)}
-                                  className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
-                                >
-                                  + {drink.name}
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="mt-2 text-xs text-neutral-500">No drinks match your filters.</p>
-                          )}
-                        </div>
-                      ) : null}
+                      </div>
                       {showOtherDrink ? (
                         <div className="mt-3 flex gap-2">
                           <input
