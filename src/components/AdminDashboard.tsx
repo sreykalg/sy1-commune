@@ -650,19 +650,31 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             </p>
             <div className="mt-3 space-y-3">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium">Drinks</p>
+                <div>
+                  <p className="text-sm font-medium">Drinks</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(drinksSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{drinksQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Food</p>
+                <div>
+                  <p className="text-sm font-medium">Food</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(foodSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{foodQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Pastries</p>
+                <div>
+                  <p className="text-sm font-medium">Pastries</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(pastriesSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{pastryQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3">
-                <p className="text-sm font-semibold">Total Sold</p>
+                <div>
+                  <p className="text-sm font-semibold">Total Sold</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(drinksSales + foodSales + pastriesSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{totalSoldQty}</p>
               </div>
             </div>
