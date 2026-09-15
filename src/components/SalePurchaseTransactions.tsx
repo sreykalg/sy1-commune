@@ -355,7 +355,7 @@ export function SalePurchaseTransactions({
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const recipeMenu = store.menu ?? [];
   const recipeMap = store.recipes ?? {};
-  type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[]; hotCupInventoryItemId?: string; icedCupInventoryItemId?: string };
+  type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[]; hotCupInventoryItemId?: string; icedCupInventoryItemId?: string; otherCupInventoryItemId?: string };
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
   const [editingCostingIndex, setEditingCostingIndex] = useState<number | null>(null);
   const [savingRecipes, setSavingRecipes] = useState(false);
@@ -1253,9 +1253,9 @@ export function SalePurchaseTransactions({
                     <div className="p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Ingredients for 1 cup</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {(["hotCupInventoryItemId", "icedCupInventoryItemId"] as const).map((field) => (
+                        {(["hotCupInventoryItemId", "icedCupInventoryItemId", "otherCupInventoryItemId"] as const).map((field) => (
                           <label key={field} className="text-xs text-neutral-600">
-                            {field === "hotCupInventoryItemId" ? "Hot cup" : "Iced cup"}
+                            {field === "hotCupInventoryItemId" ? "Hot cup" : field === "icedCupInventoryItemId" ? "Iced cup" : "Other cup"}
                             <select
                               value={costing[field] ?? ""}
                               onChange={(event) => updateCosting(costingIndex, { [field]: event.target.value || undefined })}
