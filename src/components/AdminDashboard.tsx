@@ -370,14 +370,15 @@ export function AdminDashboard({ store }: { store: StoreData }) {
 
   const netProfitOrLoss = totalSalesAmount - (totalExpensesAmount + totalCreditsAmount);
 
-  const drinksSold = unitsSold(productStatsList);
-  const foodSold = productStatsList
-    .filter((item) => item.category === "Food")
+  const drinksQty = unitsSold(productStatsList);
+  const drinksSales = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.sales, 0);
+  const foodQty = productStatsList
+    .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
     .reduce((sum, item) => sum + item.qty, 0);
-  const pastriesSold = productStatsList
-    .filter((item) => item.category === "Pastries")
+  const pastryQty = productStatsList
+    .filter((item) => /pastr/i.test(item.category))
     .reduce((sum, item) => sum + item.qty, 0);
-  const totalSold = drinksSold + foodSold + pastriesSold;
+  const totalSoldQty = drinksQty + foodQty + pastryQty;
 
   const computedAverageTicket = filteredOrdersList.length > 0 
     ? totalSalesAmount / filteredOrdersList.length 
@@ -620,22 +621,25 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             <p className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
               Sold Products
             </p>
-            <div className="mt-2 space-y-1.5 sm:mt-3">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-neutral-500">Drinks</span>
-                <span className="text-lg font-semibold sm:text-2xl">{drinksSold}</span>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Drinks</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(drinksSales)}</p>
+                </div>
+                <p className="text-2xl font-semibold sm:text-3xl">{drinksQty}</p>
               </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-neutral-500">Food</span>
-                <span className="text-lg font-semibold sm:text-2xl">{foodSold}</span>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Food</p>
+                <p className="text-2xl font-semibold sm:text-3xl">{foodQty}</p>
               </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-neutral-500">Pastries</span>
-                <span className="text-lg font-semibold sm:text-2xl">{pastriesSold}</span>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Pastries</p>
+                <p className="text-2xl font-semibold sm:text-3xl">{pastryQty}</p>
               </div>
-              <div className="flex items-baseline justify-between border-t border-neutral-100 pt-1.5">
-                <span className="text-xs font-medium text-neutral-700">Total Sold</span>
-                <span className="text-lg font-semibold sm:text-2xl">{totalSold}</span>
+              <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3">
+                <p className="text-sm font-semibold">Total Sold</p>
+                <p className="text-2xl font-semibold sm:text-3xl">{totalSoldQty}</p>
               </div>
             </div>
           </div>
