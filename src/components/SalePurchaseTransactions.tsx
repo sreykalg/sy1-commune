@@ -240,11 +240,27 @@ export function SalePurchaseTransactions({
   onTabChange,
   showTabs = true,
 }: SalePurchaseTransactionsProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<InventoryTab>(tabs[0] ?? "transactions");
+  const [internalActiveTab, setInternalActiveTab] = useState<InventoryTab>(() => {
+    if (typeof window !== "undefined") {
+      const savedTab = window.localStorage.getItem("inventory-active-tab");
+
+      if (savedTab && tabs.includes(savedTab as InventoryTab)) {
+        return savedTab as InventoryTab;
+      }
+    }
+
+    return tabs[0] ?? "transactions";
+  });
+
   const activeTab = controlledActiveTab ?? internalActiveTab;
 
   function setActiveTab(tab: InventoryTab) {
     setInternalActiveTab(tab);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("inventory-active-tab", tab);
+    }
+
     onTabChange?.(tab);
   }
   const persistedTransactions: Transaction[] = ordersToTransactions(store.orders);
