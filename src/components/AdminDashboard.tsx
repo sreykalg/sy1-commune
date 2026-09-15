@@ -10,7 +10,6 @@ import {
   busiestDay,
   cafeHours,
   categorySales,
-  changePercent,
   lastNDays,
   liveOrders,
   lowSellers,
@@ -51,14 +50,6 @@ function Metric({
       {hint ? <p className="mt-2 text-xs leading-relaxed text-neutral-500">{hint}</p> : null}
     </div>
   );
-}
-
-function deltaHint(current: number, previous: number, suffix: string) {
-  const pct = changePercent(current, previous);
-  if (pct === null) return null;
-  if (pct === 0) return `Even vs ${suffix}`;
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct}% vs ${suffix}`;
 }
 
 function VerticalBars({
@@ -601,12 +592,10 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               <Metric
                 label="Today's Sales"
                 value={formatMoney(sumSales(today))}
-                hint={`For ${todayDateStr} (vs ${yesterdayDateStr}: ${formatMoney(sumSales(yesterday))})`}
               />
               <Metric
                 label="Today's Orders"
                 value={String(today.length)}
-                hint={deltaHint(today.length, yesterday.length, `yesterday (${yesterdayDateStr})`)}
               />
             </>
           ) : (
@@ -614,12 +603,10 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               <Metric
                 label="Period Sales"
                 value={formatMoney(filteredOrdersList.reduce((s, o) => s + o.total, 0))}
-                hint={`Selected Range Sales`}
               />
               <Metric 
                 label="Period Orders" 
                 value={String(filteredOrdersList.length)} 
-                hint={`Total tickets`} 
               />
             </>
           )}
@@ -627,11 +614,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           <Metric
             label="Average Ticket"
             value={formatMoney(computedAverageTicket)}
-            hint={
-              filteredOrdersList.length === 0 
-                ? `No tickets in selected period` 
-                : `${filteredOrdersList.length} tickets in selected period`
-            }
           />
 
           <div className="min-w-0 border border-neutral-200 bg-white p-4 sm:p-5">
@@ -656,7 +638,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                 <span className="text-lg font-semibold sm:text-2xl">{totalSold}</span>
               </div>
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-neutral-500">Selected period</p>
           </div>
 
           <Metric
@@ -668,7 +649,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             <Metric
               label="Busiest Day"
               value={busy?.label ?? "—"}
-              hint={busy ? `${busy.date} · ${formatMoney(busy.sales)}` : null}
             />
           )}
         </div>
@@ -710,9 +690,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
             <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
               Peak hours <span className="hidden sm:inline">(by item volume) · 10:00 AM – 12:00 AM</span>
             </h2>
-            <span className="text-[11px] text-neutral-400">
-              {isTodaySelected ? `Today (${todayDateStr})` : "Selected period"}
-            </span>
           </div>
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
@@ -770,7 +747,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           <h2 className="text-[10px] tracking-[0.2em] text-neutral-500 uppercase sm:text-xs sm:tracking-[0.25em]">
             Sales by category (by item quantity)
           </h2>
-          <p className="mt-1 text-[11px] text-neutral-400">Selected Range</p>
           <HorizontalBars
             empty="No category sales in this period."
             items={categories
@@ -847,11 +823,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               Add Expense
             </button>
           </form>
-          ) : (
-            <p className="pt-2 border-t border-neutral-100 text-xs text-neutral-400">
-              View-only. Switch Range to Today to add or delete.
-            </p>
-          )}
+          ) : null}
 
           <div className="overflow-x-auto max-h-48 overflow-y-auto">
             <table className="w-full text-left text-sm">
@@ -931,11 +903,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               Add Credit
             </button>
           </form>
-          ) : (
-            <p className="pt-2 border-t border-neutral-100 text-xs text-neutral-400">
-              View-only. Switch Range to Today to add or delete.
-            </p>
-          )}
+          ) : null}
 
           <div className="overflow-x-auto max-h-48 overflow-y-auto">
             <table className="w-full text-left text-sm">
