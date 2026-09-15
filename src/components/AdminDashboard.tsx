@@ -652,28 +652,28 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Drinks</p>
-                  <p className="text-xs text-neutral-500">Earnings {formatMoney(drinksSales - costByCategory.drinks)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(drinksSales)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{drinksQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Food</p>
-                  <p className="text-xs text-neutral-500">Earnings {formatMoney(foodSales - costByCategory.food)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(foodSales)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{foodQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Pastries</p>
-                  <p className="text-xs text-neutral-500">Earnings {formatMoney(pastriesSales - costByCategory.pastries)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(pastriesSales)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{pastryQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3">
                 <div>
                   <p className="text-sm font-semibold">Total Earnings</p>
-                  <p className="text-xs text-neutral-500">{formatMoney(totalSalesAmount - totalCost)}</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(drinksSales + foodSales + pastriesSales)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{totalSoldQty}</p>
               </div>
