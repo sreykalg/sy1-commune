@@ -1164,21 +1164,20 @@ export function SalePurchaseTransactions({
                         />
                       ) : null}
                       {drinkCategories.length > 0 ? (
-                        <fieldset className="mt-3">
-                          <legend className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Categories</legend>
-                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+                        <label className="mt-3 block">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Category</span>
+                          <select
+                            value={selectedDrinkCategories[0] ?? ""}
+                            onChange={(event) => setSelectedDrinkCategories(event.target.value ? [event.target.value] : [])}
+                            aria-label="Filter drinks by category"
+                            className="mt-2 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-700"
+                          >
+                            <option value="">All categories</option>
                             {drinkCategories.map((category) => (
-                              <label key={category} className="flex items-center gap-1.5 text-xs text-neutral-600">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDrinkCategories.includes(category)}
-                                  onChange={(event) => setSelectedDrinkCategories((current) => event.target.checked ? [...current, category] : current.filter((item) => item !== category))}
-                                />
-                                {category}
-                              </label>
+                              <option key={category} value={category}>{category}</option>
                             ))}
-                          </div>
-                        </fieldset>
+                          </select>
+                        </label>
                       ) : null}
                       <div className="mt-4 border-t border-neutral-100 pt-3">
                         {filteredUnassignedMenuDrinks.length > 0 || menuDrinks.some((drink) => costing.drinks.includes(drink.name)) ? (
