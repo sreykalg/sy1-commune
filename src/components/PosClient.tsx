@@ -223,6 +223,7 @@ export function PosClient({
   const floorCategories = useMemo(() => {
     const set = new Set<string>();
     categories.forEach((cat) => {
+      if (cat.trim().toLowerCase() === "add-ons") return;
       set.add(normalizeCat(cat));
     });
     return ["All", ...Array.from(set)];
@@ -233,6 +234,7 @@ export function PosClient({
     const needle = query.trim().toLowerCase();
     return menu.filter((item) => {
       if (!item.available) return false;
+      if (item.category.trim().toLowerCase() === "add-ons") return false;
 
       const itemCatNormalized = normalizeCat(item.category);
       const selectedCatNormalized = normalizeCat(category);

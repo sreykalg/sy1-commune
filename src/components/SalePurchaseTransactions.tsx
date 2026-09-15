@@ -396,7 +396,7 @@ export function SalePurchaseTransactions({
   }
 
   const menuDrinks = useMemo(
-    () => recipeMenu.filter((drink) => !isFoodOrPastry(drink.category)),
+    () => recipeMenu.filter((drink) => !isFoodOrPastry(drink.category) && drink.category.trim().toLowerCase() !== "add-ons"),
     [recipeMenu],
   );
   const assignedDrinkNames = useMemo(
