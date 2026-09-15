@@ -309,7 +309,12 @@ function normalizeStore(store: StoreData): StoreData {
   if (!Array.isArray(store.recipeCostings)) {
     store.recipeCostings = [];
   } else {
-    store.recipeCostings = store.recipeCostings.filter((costing) => costing && typeof costing.id === "string" && typeof costing.name === "string" && Array.isArray(costing.drinks) && Array.isArray(costing.ingredients));
+    store.recipeCostings = store.recipeCostings
+      .filter((costing) => costing && typeof costing.name === "string" && Array.isArray(costing.drinks) && Array.isArray(costing.ingredients))
+      .map((costing, index) => ({
+        ...costing,
+        id: typeof costing.id === "string" && costing.id ? costing.id : `recipe-costing-${index}`,
+      }));
   }
   if (!store.recipes || typeof store.recipes !== "object") {
     store.recipes = structuredClone(DEFAULT_RECIPES);

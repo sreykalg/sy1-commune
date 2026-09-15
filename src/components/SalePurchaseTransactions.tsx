@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
 import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
+import { orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
 import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
 
 function inventoryUsagePerPiece(item: StockItem, used: number) {
@@ -40,6 +41,7 @@ type SalePurchaseTransactionsProps = {
 type Transaction = {
   id: string;
   productName: string;
+  productLines: string[];
   type: "Purchase" | "Sale";
   quantity: number;
   price: number;
@@ -54,9 +56,11 @@ function ordersToTransactions(orders: Order[]): Transaction[] {
     .map((order) => {
       const quantity = order.items.reduce((sum, item) => sum + item.qty, 0);
       const amount = order.total;
+      const productLines = orderSoldAsLines(order.items);
       return {
         id: order.id,
-        productName: order.items.map((item) => `${item.qty}x ${item.name}`).join(", "),
+        productName: productLines.join(", "),
+        productLines,
         type: (order.recordType === "Purchase" ? "Purchase" : "Sale") as "Purchase" | "Sale",
         quantity,
         price: quantity > 0 ? amount / quantity : amount,
@@ -70,6 +74,20 @@ function ordersToTransactions(orders: Order[]): Transaction[] {
 
 const iconBtn =
   "inline-flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-all hover:bg-neutral-100 hover:text-neutral-900";
+
+function DrinkLines({ lines }: { lines: string[] }) {
+  if (lines.length === 0) return <span>—</span>;
+  if (lines.length === 1) return <span className="break-words">{lines[0]}</span>;
+  return (
+    <ul className="space-y-0.5">
+      {lines.map((line, index) => (
+        <li key={`${line}-${index}`} className="break-words">
+          {line}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function PencilIcon() {
   return (
@@ -125,8 +143,8 @@ function transactionToOrder(transaction: Transaction, existing?: Order): Order {
   const createdAt = phIsoFromDate(transaction.date, existing?.createdAt);
   const sameItems =
     existing &&
-    existing.items.map((item) => `${item.qty}x ${item.name}`).join(", ") === transaction.productName &&
-    existing.items.reduce((sum, item) => sum + item.qty, 0) === transaction.quantity;
+    existing.items.reduce((sum, item) => sum + item.qty, 0) === transaction.quantity &&
+    orderSoldAsLabel(existing.items) === transaction.productName;
 
   return {
     id: transaction.id,
@@ -192,6 +210,29 @@ type UsageRecord = {
   soldAs: string;
 };
 
+function usageItemKey(itemName: string, unit: string, orderId?: string) {
+  return `${orderId ?? ""}::${itemName.trim().toLowerCase()}::${unit.trim().toLowerCase()}`;
+}
+
+function aggregateUsageRows<
+  T extends { id: string; orderId?: string; itemName: string; usedAmount: number; unit: string; remaining?: number },
+>(rows: T[]): T[] {
+  const merged = new Map<string, T>();
+  for (const row of rows) {
+    const key = usageItemKey(row.itemName, row.unit, row.orderId);
+    const existing = merged.get(key);
+    if (existing) {
+      existing.usedAmount = roundQty(existing.usedAmount + row.usedAmount);
+      if (typeof existing.remaining === "number" && typeof row.remaining === "number") {
+        existing.remaining = Math.min(existing.remaining, row.remaining);
+      }
+    } else {
+      merged.set(key, { ...row });
+    }
+  }
+  return [...merged.values()];
+}
+
 export function SalePurchaseTransactions({
   store,
   tabs = ["transactions", "stock", "restock", "recipes", "used", "units"],
@@ -227,9 +268,19 @@ export function SalePurchaseTransactions({
       itemName: ingredient.name,
       usedAmount: roundQty(Number(ingredient.amount) * line.qty),
       unit: ingredient.unit,
-      soldAs: order.items.map((item) => `${item.qty}x ${item.name}`).join(", "),
+      soldAs: orderSoldAsLabel(order.items),
     }))));
-  const sourceUsages = orderUsageRows.length > 0 ? orderUsageRows : store.usageLogs;
+  const reconstructedOrderIds = new Set(orderUsageRows.map((row) => row.orderId));
+  const extraUsageLogs = (store.usageLogs ?? [])
+    .filter((entry) => entry.orderId && !reconstructedOrderIds.has(entry.orderId))
+    .map((entry) => {
+      const order = store.orders.find((item) => item.id === entry.orderId);
+      return {
+        ...entry,
+        soldAs: order ? orderSoldAsLabel(order.items) : "",
+      };
+    });
+  const sourceUsages = aggregateUsageRows([...orderUsageRows, ...extraUsageLogs]);
   const reconstructedRemaining = remainingForUsages(
     sourceUsages,
     store.restocks ?? [],
@@ -271,7 +322,7 @@ export function SalePurchaseTransactions({
     setUsages(persistedUsages);
     setRestocks(store.restocks ?? []);
     setCostings(store.costings ?? []);
-  }, [store.orders, store.inventory, store.usageLogs, store.restocks, store.costings]);
+  }, [store.orders, store.inventory, store.usageLogs, store.restocks, store.costings, store.recipes, store.recipeCostings]);
 
   const [editStockId, setEditStockId] = useState<string | null>(null);
   const [stockName, setStockName] = useState("");
@@ -389,7 +440,6 @@ export function SalePurchaseTransactions({
   await saveAdminData({ recipes, recipeCostings: savedCostings });
   }
 
-  const [filterType, setFilterType] = useState("All");
   const [filterKeyword, setFilterKeyword] = useState("");
   const [rangeType, setRangeType] = useState<PeriodRange>("today");
   const [filterDate, setFilterDate] = useState(getTodayDate);
@@ -829,30 +879,23 @@ export function SalePurchaseTransactions({
 
   const filteredTransactions = transactions.filter((t) => {
     const matchesKw = t.productName.toLowerCase().includes(filterKeyword.toLowerCase());
-    const matchesTp = filterType === "All" || t.type === filterType;
-    return matchesKw && matchesTp && inDateRange(t.date);
+    return matchesKw && inDateRange(t.date);
   });
 
   const usageGroups = useMemo(() => {
-    const byOrder = new Map<string, UsageRecord[]>();
-    for (const usage of usages) {
-      if (!inDateRange(usage.date)) continue;
-      const key = usage.orderId || usage.id;
-      const list = byOrder.get(key) ?? [];
-      list.push(usage);
-      byOrder.set(key, list);
-    }
     const keyword = filterKeyword.trim().toLowerCase();
-    return [...byOrder.entries()]
-      .map(([orderId, items]) => {
-        const order = store.orders.find((entry) => entry.id === orderId);
-        const orderLabel =
-          order?.ticketNo != null ? `#${order.ticketNo}` : orderId;
+    return store.orders
+      .filter((order) => !order.voided && inDateRange(order.createdAt))
+      .map((order) => {
+        const items = aggregateUsageRows(usages.filter((usage) => usage.orderId === order.id));
+        const soldAsLines = orderSoldAsLines(order.items);
+        const soldAs = soldAsLines.join(", ");
         return {
-          orderId,
-          orderLabel,
-          date: items[0]?.date ?? order?.createdAt ?? "",
-          soldAs: items[0]?.soldAs || "—",
+          orderId: order.id,
+          orderLabel: order.ticketNo != null ? `#${order.ticketNo}` : order.id,
+          date: order.createdAt,
+          soldAs,
+          soldAsLines,
           items,
         };
       })
@@ -973,14 +1016,6 @@ export function SalePurchaseTransactions({
       {activeTab === "transactions" && (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-4 items-center bg-neutral-50 p-3 rounded-lg border border-neutral-400 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-neutral-600">Type:</span>
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-white border border-neutral-400 rounded px-2 py-1 text-xs">
-                <option value="All">All</option>
-                <option value="Sale">Sale</option>
-                <option value="Purchase">Purchase</option>
-              </select>
-            </div>
             <div className="flex min-w-0 w-full items-center gap-2 sm:flex-1">
               <span className="shrink-0 text-xs text-neutral-600">Search:</span>
               <input type="text" placeholder="Search product..." value={filterKeyword} onChange={(e) => setFilterKeyword(e.target.value)} className="min-w-0 flex-1 bg-white border border-neutral-400 rounded px-2 py-1 text-xs sm:max-w-xs" />
@@ -988,12 +1023,11 @@ export function SalePurchaseTransactions({
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white shadow-sm">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-black border-b border-black text-white font-semibold text-xs">
                   <th className="p-3 border-r border-white/15">Date</th>
                   <th className="p-3 border-r border-white/15">Product Name</th>
-                  <th className="p-3 border-r border-white/15">Type</th>
                   <th className="p-3 border-r border-white/15 text-right">Quantity</th>
                   <th className="p-3 border-r border-white/15 text-right">Price</th>
                   <th className="p-3 border-r border-white/15 text-right">Amount</th>
@@ -1002,15 +1036,16 @@ export function SalePurchaseTransactions({
               </thead>
               <tbody>
                 {filteredTransactions.length === 0 ? (
-                  <tr><td colSpan={7} className="p-4 text-center text-neutral-500 text-xs">No transactions found for this date range.</td></tr>
+                  <tr><td colSpan={6} className="p-4 text-center text-neutral-500 text-xs">No transactions found for this date range.</td></tr>
                 ) : (
                   filteredTransactions.map((t) => (
                     <tr key={t.id} className="border-b border-neutral-200 hover:bg-neutral-50 text-xs">
                       <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium whitespace-nowrap">
                         {phDateTimeLabel(t.createdAt)}
                       </td>
-                      <td className="p-3 border-r border-neutral-200 font-medium">{t.productName}</td>
-                      <td className={`p-3 border-r border-neutral-200 font-semibold ${t.type === "Purchase" ? "text-neutral-500" : "text-black"}`}>{t.type}</td>
+                      <td className="p-3 border-r border-neutral-200 font-medium">
+                        <DrinkLines lines={t.productLines} />
+                      </td>
                       <td className="p-3 border-r border-neutral-200 text-right">{t.quantity}</td>
                       <td className="p-3 border-r border-neutral-200 text-right">₱{t.price.toFixed(2)}</td>
                       <td className="p-3 border-r border-neutral-200 text-right font-semibold">₱{t.amount.toFixed(2)}</td>
@@ -1429,7 +1464,9 @@ export function SalePurchaseTransactions({
                           <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium whitespace-nowrap">
                             {phDateTimeLabel(group.date)}
                           </td>
-                          <td className="p-3 text-neutral-600">{group.soldAs}</td>
+                          <td className="p-3 text-neutral-600">
+                            <DrinkLines lines={group.soldAsLines} />
+                          </td>
                         </tr>
                         {open ? (
                           <tr className="border-b border-neutral-200 bg-neutral-50">
@@ -1439,23 +1476,31 @@ export function SalePurchaseTransactions({
                                   <tr className="text-[10px] tracking-wide text-neutral-500 uppercase">
                                     <th className="px-3 py-2 pl-10">Item Name</th>
                                     <th className="px-3 py-2 text-right">Used Amount</th>
-                                    <th className="px-3 py-2 text-right">Remaining</th>
                                     <th className="px-3 py-2 text-center">Unit</th>
+                                    <th className="px-3 py-2 text-right">Remaining</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {group.items.map((usage, index) => (
-                                    <tr key={`${usage.id}-${index}`}>
-                                      <td className="px-3 py-2 pl-10 font-medium">{usage.itemName}</td>
-                                      <td className="px-3 py-2 text-right font-bold text-red-600">
-                                        -{formatQty(usage.usedAmount)}
+                                  {group.items.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={4} className="px-3 py-3 pl-10 text-neutral-500">
+                                        No recipe assigned for these drinks, so no stock was deducted.
                                       </td>
-                                      <td className="px-3 py-2 text-right font-semibold">
-                                        {formatQty(usage.remaining)}
-                                      </td>
-                                      <td className="px-3 py-2 text-center text-neutral-600">{usage.unit}</td>
                                     </tr>
-                                  ))}
+                                  ) : (
+                                    group.items.map((usage, index) => (
+                                      <tr key={`${usage.id}-${index}`}>
+                                        <td className="px-3 py-2 pl-10 font-medium">{usage.itemName}</td>
+                                        <td className="px-3 py-2 text-right font-bold text-red-600">
+                                          -{formatQty(usage.usedAmount)}
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-neutral-600">{usage.unit}</td>
+                                        <td className="px-3 py-2 text-right font-semibold">
+                                          {formatQty(usage.remaining)}
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
                                 </tbody>
                               </table>
                             </td>

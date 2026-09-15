@@ -1084,15 +1084,23 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                       })}
                     </p>
                     <p className="mt-0.5 text-xs text-neutral-500 lg:hidden">{order.baristaName}</p>
-                    {!isVoided(order) ? (
+                    {isVoided(order) ? (
+                      <p className="mt-0.5 text-sm font-medium text-neutral-400 line-through lg:hidden">
+                        {orderIdLabel(order)}
+                      </p>
+                    ) : (
                       <p className="mt-0.5 text-sm font-medium lg:hidden">{orderIdLabel(order)}</p>
-                    ) : null}
+                    )}
                   </div>
                   <p className="hidden min-w-0 break-words text-sm text-neutral-700 lg:block">
                     {order.baristaName}
                   </p>
                   <p className="hidden min-w-0 text-sm font-medium lg:block">
-                    {isVoided(order) ? "" : orderIdLabel(order)}
+                    {isVoided(order) ? (
+                      <span className="text-neutral-400 line-through">{orderIdLabel(order)}</span>
+                    ) : (
+                      orderIdLabel(order)
+                    )}
                   </p>
                   <ul className="min-w-0 list-disc space-y-1 pl-4 text-xs leading-relaxed text-neutral-600 lg:text-sm">
                     {order.items.map((item, itemIdx) => (

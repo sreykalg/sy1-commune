@@ -15,6 +15,8 @@ export type MenuAddon = {
   price: number;
   qtyEnabled?: boolean;
   inventoryItemId?: string;
+  usageAmount?: number;
+  usageUnit?: string;
 };
 
 export type OrderAddon = {
@@ -22,6 +24,9 @@ export type OrderAddon = {
   name: string;
   price: number;
   qty: number;
+  inventoryItemId?: string;
+  usageAmount?: number;
+  usageUnit?: string;
 };
 
 export type MenuItem = {
