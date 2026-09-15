@@ -340,7 +340,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
     }))
     .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
   
-  const categories = categorySales(productStatsList).filter((item) => item.qty > 0);
+  const categories = categorySales(drinkProductStats(productStatsList)).filter((item) => item.qty > 0);
   
   // Custom mapping para siguraduhing ang bibilangin ay ang total item quantity sa halip na order count lang
   const rawHours = salesByHour(filteredOrdersList, now, rangeType === "week" && activeFilterMode === "range" ? 7 : 1);
