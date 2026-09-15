@@ -117,7 +117,10 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
           <button
             key={entry.id}
             type="button"
-            onClick={() => setTab(entry.id)}
+            onClick={() => {
+              setTab(entry.id);
+              setNotice(null);
+            }}
             className={`shrink-0 px-4 py-1.5 rounded text-xs font-bold transition shadow-sm uppercase ${
               tab === entry.id ? "bg-black text-white" : "bg-white text-neutral-700 hover:bg-neutral-100"
             }`}
@@ -167,11 +170,11 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                     if (editingId === "new") {
                       startCreate();
                       setEditingId(null);
-                      setNotice("Staff added.");
+                      setNotice(null);
                       return;
                     }
                     resetForm();
-                    setNotice("Account updated.");
+                    setNotice(null);
                   });
                 }}
               >
@@ -278,7 +281,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                             return;
                           }
                           if (editingId === user.id) resetForm();
-                          setNotice("Staff deleted.");
+                          setNotice(null);
                         })
                       }
                       className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
@@ -296,10 +299,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
 
         {tab === "inout" ? (
           <>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Staff in / out</h1>
-              <p className="mt-1 text-sm text-neutral-500">Clock in and out times for cashiers, managers, and baristas.</p>
-            </div>
+            <h1 className="text-xl font-semibold tracking-tight">Staff in / out</h1>
             <form
               className="flex flex-col gap-2 rounded-2xl border border-neutral-200 bg-white p-3 sm:flex-row sm:items-center"
               onSubmit={(event) => event.preventDefault()}
@@ -327,7 +327,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                         setNotice(typeof result.error === "string" ? result.error : "Could not record.");
                         return;
                       }
-                      setNotice("Marked in.");
+                      setNotice(null);
                     })
                   }
                   className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
@@ -344,7 +344,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                         setNotice(typeof result.error === "string" ? result.error : "Could not record.");
                         return;
                       }
-                      setNotice("Marked out.");
+                      setNotice(null);
                     })
                   }
                   className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium hover:border-black disabled:opacity-40"
@@ -421,7 +421,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                                           return;
                                         }
                                         setEditingSessionId(null);
-                                        setNotice("In / off time updated.");
+                                        setNotice(null);
                                       })
                                     }
                                     className="hover:underline disabled:opacity-40"
@@ -462,7 +462,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                                           setNotice(result.error);
                                           return;
                                         }
-                                        setNotice("In / out record deleted.");
+                                        setNotice(null);
                                       });
                                     }}
                                     className="inline-flex size-8 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
@@ -488,10 +488,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
 
         {tab === "off" ? (
           <>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Request off</h1>
-              <p className="mt-1 text-sm text-neutral-500">Day-off requests. POS staff can send these; you can also add or approve them here.</p>
-            </div>
+            <h1 className="text-xl font-semibold tracking-tight">Request off</h1>
             <form
               className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 sm:grid-cols-4 sm:items-end"
               onSubmit={(event) => {
@@ -503,7 +500,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                     return;
                   }
                   setOffReason("");
-                  setNotice("Off request saved.");
+                  setNotice(null);
                 });
               }}
             >
@@ -602,12 +599,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
 
         {tab === "gates" ? (
           <>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Login links</h1>
-              <p className="mt-1 text-sm text-neutral-500">
-                Change these if a link is forgotten or needs to stay private. The old path stops working after you save.
-              </p>
-            </div>
+            <h1 className="text-xl font-semibold tracking-tight">Login links</h1>
             <form
               className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5"
               onSubmit={(event) => {
@@ -622,7 +614,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
                     setAdminGate(result.admin);
                     setCashierGate(result.cashier);
                   }
-                  setNotice("Login links updated. Bookmark the new URLs.");
+                  setNotice(null);
                 });
               }}
             >

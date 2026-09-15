@@ -578,13 +578,10 @@ export function AdminDashboard({ store }: { store: StoreData }) {
       ) : null}
 
       <section className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">
+        <div className="border-b border-neutral-200 pb-3">
           <h2 className="text-xs tracking-[0.25em] text-neutral-500 uppercase">
             Performance Overview
           </h2>
-          <span className="rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-600">
-            Selected Range: {activeFilterMode === "range" ? rangeType.toUpperCase() : filterDateStr}
-          </span>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
