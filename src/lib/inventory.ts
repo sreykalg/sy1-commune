@@ -269,9 +269,14 @@ export function ingredientsForOrderLine(
     if (!selectedCup || !cupSkuForItem({ id: ingredient.inventoryItemId, name: ingredient.name })) return ingredient;
     return { ...ingredient, inventoryItemId: selectedCup.id, name: selectedCup.name, unit: selectedCup.unit };
   });
+  const hasConfiguredCup = resolvedRecipe.some((ingredient) => ingredient.inventoryItemId === selectedCup?.id);
+  const cupIngredient = selectedCup && !hasConfiguredCup
+    ? [{ inventoryItemId: selectedCup.id, name: selectedCup.name, amount: 1, unit: selectedCup.unit }]
+    : [];
 
   return [
     ...resolvedRecipe,
+    ...cupIngredient,
     ...addonIngredientsForOrderLine(store, line),
   ];
 }
