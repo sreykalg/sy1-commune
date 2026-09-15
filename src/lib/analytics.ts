@@ -146,8 +146,8 @@ export function productStats(
 // Helper para i-filter ang Drinks lang
 export function drinkProductStats(stats: ProductStat[]): ProductStat[] {
   return stats.filter((item) => {
-    const cat = item.category.toLowerCase();
-    return cat.includes("drink") || cat.includes("coffee") || cat.includes("beverage") || cat.includes("tea") || (!cat.includes("food") && !cat.includes("pastr") && !cat.includes("snack"));
+    const category = item.category.replace(/[^a-z]/gi, "").toLowerCase();
+    return category.includes("drink") || category.includes("coffee") || category.includes("beverage") || category.includes("tea");
   });
 }
 

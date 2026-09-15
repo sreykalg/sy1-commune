@@ -371,7 +371,7 @@ export function AdminDashboard({ store }: { store: StoreData }) {
 
   const netProfitOrLoss = totalSalesAmount - (totalExpensesAmount + totalCreditsAmount);
 
-  const drinksQty = unitsSold(productStatsList);
+  const drinksQty = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.qty, 0);
   const drinksSales = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.sales, 0);
   const foodSales = productStatsList
     .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
@@ -396,8 +396,15 @@ export function AdminDashboard({ store }: { store: StoreData }) {
         const packSize = Number(inventoryItem.purchaseUnitSize) || Number(inventoryItem.cupsMake) || 1;
         return sum + (Number(ingredient.amount) / packSize) * Number(inventoryItem.cost || 0) * line.qty;
       }, 0);
-      const key = /pastr/i.test(category) ? "pastries" : /food/i.test(category) ? "food" : "drinks";
-      totals[key] += lineCost;
+      const normalizedCategory = category.replace(/[^a-z]/gi, "").toLowerCase();
+      const key = /pastr/.test(normalizedCategory)
+        ? "pastries"
+        : /food/.test(normalizedCategory)
+          ? "food"
+          : /drink|coffee|beverage|tea/.test(normalizedCategory)
+            ? "drinks"
+            : null;
+      if (key) totals[key] += lineCost;
     });
     return totals;
   }, { drinks: 0, food: 0, pastries: 0 });
