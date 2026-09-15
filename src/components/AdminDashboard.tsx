@@ -373,6 +373,12 @@ export function AdminDashboard({ store }: { store: StoreData }) {
 
   const drinksQty = unitsSold(productStatsList);
   const drinksSales = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.sales, 0);
+  const foodSales = productStatsList
+    .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
+    .reduce((sum, item) => sum + item.sales, 0);
+  const pastriesSales = productStatsList
+    .filter((item) => /pastr/i.test(item.category))
+    .reduce((sum, item) => sum + item.sales, 0);
   const foodQty = productStatsList
     .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
     .reduce((sum, item) => sum + item.qty, 0);
@@ -639,28 +645,28 @@ export function AdminDashboard({ store }: { store: StoreData }) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Drinks</p>
-                  <p className="text-xs text-neutral-500">Sales {formatMoney(drinksSales)} · Cost {formatMoney(costByCategory.drinks)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(drinksSales - costByCategory.drinks)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{drinksQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Food</p>
-                  <p className="text-xs text-neutral-500">Cost {formatMoney(costByCategory.food)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(foodSales - costByCategory.food)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{foodQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Pastries</p>
-                  <p className="text-xs text-neutral-500">Cost {formatMoney(costByCategory.pastries)}</p>
+                  <p className="text-xs text-neutral-500">Earnings {formatMoney(pastriesSales - costByCategory.pastries)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{pastryQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3">
                 <div>
-                  <p className="text-sm font-semibold">Total Sold</p>
-                  <p className="text-xs text-neutral-500">Total cost {formatMoney(totalCost)}</p>
+                  <p className="text-sm font-semibold">Total Earnings</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(totalSalesAmount - totalCost)}</p>
                 </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{totalSoldQty}</p>
               </div>
