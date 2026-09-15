@@ -361,6 +361,9 @@ export function SalePurchaseTransactions({
   const [savingRecipes, setSavingRecipes] = useState(false);
   const [otherDrinkName, setOtherDrinkName] = useState("");
   const [showOtherDrink, setShowOtherDrink] = useState(false);
+  const [showDrinkSearch, setShowDrinkSearch] = useState(false);
+  const [drinkSearch, setDrinkSearch] = useState("");
+  const [selectedDrinkCategories, setSelectedDrinkCategories] = useState<string[]>([]);
   const hasHydratedCostings = useRef(false);
 
   useEffect(() => {
@@ -400,10 +403,22 @@ export function SalePurchaseTransactions({
     () => new Set(recipeCostings.flatMap((costing) => costing.drinks.map((name) => name.trim().toLowerCase()))),
     [recipeCostings],
   );
+  const drinkCategories = useMemo(
+    () => Array.from(new Set(menuDrinks.map((drink) => drink.category?.trim()).filter(Boolean))).sort(),
+    [menuDrinks],
+  );
   const unassignedMenuDrinks = useMemo(
     () => menuDrinks.filter((drink) => !assignedDrinkNames.has(drink.name.trim().toLowerCase())),
     [assignedDrinkNames, menuDrinks],
   );
+  const filteredUnassignedMenuDrinks = useMemo(() => {
+    const query = drinkSearch.trim().toLowerCase();
+    return unassignedMenuDrinks.filter((drink) => {
+      const matchesSearch = !query || drink.name.toLowerCase().includes(query);
+      const matchesCategory = selectedDrinkCategories.length === 0 || selectedDrinkCategories.includes(drink.category);
+      return matchesSearch && matchesCategory;
+    });
+  }, [drinkSearch, selectedDrinkCategories, unassignedMenuDrinks]);
 
   function addDrinkToCosting(index: number, drink: string) {
     const name = drink.trim();
@@ -1129,7 +1144,42 @@ export function SalePurchaseTransactions({
                 {isEditing ? (
                   <div className="grid border-t border-neutral-200 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
                     <div className="border-b border-neutral-200 p-4 lg:border-b-0 lg:border-r">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Drinks</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Drinks</p>
+                        <button
+                          type="button"
+                          onClick={() => setShowDrinkSearch((visible) => !visible)}
+                          className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+                        >
+                          Search
+                        </button>
+                      </div>
+                      {showDrinkSearch ? (
+                        <input
+                          value={drinkSearch}
+                          onChange={(event) => setDrinkSearch(event.target.value)}
+                          placeholder="Search drinks"
+                          aria-label="Search drinks"
+                          className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                        />
+                      ) : null}
+                      {drinkCategories.length > 0 ? (
+                        <fieldset className="mt-3">
+                          <legend className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Categories</legend>
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+                            {drinkCategories.map((category) => (
+                              <label key={category} className="flex items-center gap-1.5 text-xs text-neutral-600">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDrinkCategories.includes(category)}
+                                  onChange={(event) => setSelectedDrinkCategories((current) => event.target.checked ? [...current, category] : current.filter((item) => item !== category))}
+                                />
+                                {category}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      ) : null}
                       <ul className="mt-2 divide-y divide-neutral-100">
                         {costing.drinks.length === 0 ? (
                           <li className="py-2 text-sm text-neutral-500">Tap a drink below to add it.</li>
@@ -1151,18 +1201,22 @@ export function SalePurchaseTransactions({
                       {unassignedMenuDrinks.length > 0 ? (
                         <div className="mt-4">
                           <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Add</p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {unassignedMenuDrinks.map((drink) => (
-                              <button
-                                key={drink.id}
-                                type="button"
-                                onClick={() => addDrinkToCosting(costingIndex, drink.name)}
-                                className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
-                              >
-                                + {drink.name}
-                              </button>
-                            ))}
-                          </div>
+                          {filteredUnassignedMenuDrinks.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {filteredUnassignedMenuDrinks.map((drink) => (
+                                <button
+                                  key={drink.id}
+                                  type="button"
+                                  onClick={() => addDrinkToCosting(costingIndex, drink.name)}
+                                  className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+                                >
+                                  + {drink.name}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-neutral-500">No drinks match your filters.</p>
+                          )}
                         </div>
                       ) : null}
                       {showOtherDrink ? (
