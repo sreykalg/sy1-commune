@@ -262,8 +262,21 @@ export function ingredientsForOrderLine(
     ? costing?.ingredients ?? []
     : (store.recipes ?? {})[line.productId] ?? Object.entries(store.recipes ?? {}).find(([recipeKey]) => matchesDrink(recipeKey))?.[1] ?? [];
 
+  const inventory = store.inventory ?? [];
+  const selectedCostingCupId = line.style === "hot" ? costing?.hotCupInventoryItemId : line.style === "iced" ? costing?.icedCupInventoryItemId : costing?.otherCupInventoryItemId;
+  const selectedCup = selectedCostingCupId ? inventory.find((item) => item.id === selectedCostingCupId) : undefined;
+  const resolvedRecipe = recipe.filter((ingredient) => Number(ingredient.amount) > 0).map((ingredient) => {
+    if (!selectedCup || !cupSkuForItem({ id: ingredient.inventoryItemId, name: ingredient.name })) return ingredient;
+    return { ...ingredient, inventoryItemId: selectedCup.id, name: selectedCup.name, unit: selectedCup.unit };
+  });
+  const hasConfiguredCup = resolvedRecipe.some((ingredient) => ingredient.inventoryItemId === selectedCup?.id);
+  const cupIngredient = selectedCup && !hasConfiguredCup
+    ? [{ inventoryItemId: selectedCup.id, name: selectedCup.name, amount: 1, unit: selectedCup.unit }]
+    : [];
+
   return [
-    ...recipe.filter((ingredient) => Number(ingredient.amount) > 0),
+    ...resolvedRecipe,
+    ...cupIngredient,
     ...addonIngredientsForOrderLine(store, line),
   ];
 }

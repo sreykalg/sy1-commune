@@ -5,6 +5,7 @@ import { approveVoidRequest } from "@/actions/pos";
 import { formatMoney, orderLineListLabel } from "@/lib/menu";
 import { phDateTimeLabel } from "@/lib/datetime";
 import { paymentLabel } from "@/lib/payments";
+import { ingredientsForOrderLine } from "@/lib/inventory";
 import {
   bestSellers,
   busiestDay,
@@ -370,8 +371,14 @@ export function AdminDashboard({ store }: { store: StoreData }) {
 
   const netProfitOrLoss = totalSalesAmount - (totalExpensesAmount + totalCreditsAmount);
 
-  const drinksQty = unitsSold(productStatsList);
+  const drinksQty = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.qty, 0);
   const drinksSales = drinkProductStats(productStatsList).reduce((sum, item) => sum + item.sales, 0);
+  const foodSales = productStatsList
+    .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
+    .reduce((sum, item) => sum + item.sales, 0);
+  const pastriesSales = productStatsList
+    .filter((item) => /pastr/i.test(item.category))
+    .reduce((sum, item) => sum + item.sales, 0);
   const foodQty = productStatsList
     .filter((item) => /food/i.test(item.category) && !/pastr/i.test(item.category))
     .reduce((sum, item) => sum + item.qty, 0);
@@ -379,6 +386,29 @@ export function AdminDashboard({ store }: { store: StoreData }) {
     .filter((item) => /pastr/i.test(item.category))
     .reduce((sum, item) => sum + item.qty, 0);
   const totalSoldQty = drinksQty + foodQty + pastryQty;
+  const costByCategory = filteredOrdersList.reduce((totals, order) => {
+    order.items.forEach((line) => {
+      const menuItem = store.menu.find((item) => item.id === line.productId) ?? store.menu.find((item) => item.name.trim().toLowerCase() === line.name.trim().toLowerCase());
+      const category = menuItem?.category ?? "Other";
+      const lineCost = ingredientsForOrderLine(store, line).reduce((sum, ingredient) => {
+        const inventoryItem = store.inventory.find((item) => item.id === ingredient.inventoryItemId);
+        if (!inventoryItem) return sum;
+        const packSize = Number(inventoryItem.purchaseUnitSize) || Number(inventoryItem.cupsMake) || 1;
+        return sum + (Number(ingredient.amount) / packSize) * Number(inventoryItem.cost || 0) * line.qty;
+      }, 0);
+      const normalizedCategory = category.replace(/[^a-z]/gi, "").toLowerCase();
+      const key = /pastr/.test(normalizedCategory)
+        ? "pastries"
+        : /food/.test(normalizedCategory)
+          ? "food"
+          : /drink|coffee|beverage|tea/.test(normalizedCategory)
+            ? "drinks"
+            : null;
+      if (key) totals[key] += lineCost;
+    });
+    return totals;
+  }, { drinks: 0, food: 0, pastries: 0 });
+  const totalCost = costByCategory.drinks + costByCategory.food + costByCategory.pastries;
 
   const computedAverageTicket = filteredOrdersList.length > 0 
     ? totalSalesAmount / filteredOrdersList.length 
@@ -627,15 +657,24 @@ export function AdminDashboard({ store }: { store: StoreData }) {
                 <p className="text-2xl font-semibold sm:text-3xl">{drinksQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Food</p>
+                <div>
+                  <p className="text-sm font-medium">Food</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(foodSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{foodQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Pastries</p>
+                <div>
+                  <p className="text-sm font-medium">Pastries</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(pastriesSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{pastryQty}</p>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-neutral-200 pt-3">
-                <p className="text-sm font-semibold">Total Sold</p>
+                <div>
+                  <p className="text-sm font-semibold">Total Sold</p>
+                  <p className="text-xs text-neutral-500">{formatMoney(drinksSales + foodSales + pastriesSales)}</p>
+                </div>
                 <p className="text-2xl font-semibold sm:text-3xl">{totalSoldQty}</p>
               </div>
             </div>

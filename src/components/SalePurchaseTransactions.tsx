@@ -355,12 +355,15 @@ export function SalePurchaseTransactions({
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const recipeMenu = store.menu ?? [];
   const recipeMap = store.recipes ?? {};
-  type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[] };
+  type Costing = { id?: string; name: string; drinks: string[]; ingredients: RecipeIngredient[]; hotCupInventoryItemId?: string; icedCupInventoryItemId?: string; otherCupInventoryItemId?: string };
   const [recipeCostings, setRecipeCostings] = useState<Costing[]>([]);
   const [editingCostingIndex, setEditingCostingIndex] = useState<number | null>(null);
   const [savingRecipes, setSavingRecipes] = useState(false);
   const [otherDrinkName, setOtherDrinkName] = useState("");
   const [showOtherDrink, setShowOtherDrink] = useState(false);
+  const [showDrinkSearch, setShowDrinkSearch] = useState(false);
+  const [drinkSearch, setDrinkSearch] = useState("");
+  const [selectedDrinkCategories, setSelectedDrinkCategories] = useState<string[]>([]);
   const hasHydratedCostings = useRef(false);
 
   useEffect(() => {
@@ -393,17 +396,32 @@ export function SalePurchaseTransactions({
   }
 
   const menuDrinks = useMemo(
-    () => recipeMenu.filter((drink) => !isFoodOrPastry(drink.category)),
+    () => recipeMenu.filter((drink) => {
+      const normalizedCategory = drink.category.replace(/[^a-z]/gi, "").toLowerCase();
+      return !isFoodOrPastry(drink.category) && normalizedCategory !== "addons" && normalizedCategory !== "addson";
+    }),
     [recipeMenu],
   );
   const assignedDrinkNames = useMemo(
     () => new Set(recipeCostings.flatMap((costing) => costing.drinks.map((name) => name.trim().toLowerCase()))),
     [recipeCostings],
   );
+  const drinkCategories = useMemo(
+    () => Array.from(new Set(menuDrinks.map((drink) => drink.category?.trim()).filter(Boolean))).sort(),
+    [menuDrinks],
+  );
   const unassignedMenuDrinks = useMemo(
     () => menuDrinks.filter((drink) => !assignedDrinkNames.has(drink.name.trim().toLowerCase())),
     [assignedDrinkNames, menuDrinks],
   );
+  const filteredUnassignedMenuDrinks = useMemo(() => {
+    const query = drinkSearch.trim().toLowerCase();
+    return unassignedMenuDrinks.filter((drink) => {
+      const matchesSearch = !query || drink.name.toLowerCase().includes(query);
+      const matchesCategory = selectedDrinkCategories.length === 0 || selectedDrinkCategories.includes(drink.category);
+      return matchesSearch && matchesCategory;
+    });
+  }, [drinkSearch, selectedDrinkCategories, unassignedMenuDrinks]);
 
   function addDrinkToCosting(index: number, drink: string) {
     const name = drink.trim();
@@ -1129,42 +1147,79 @@ export function SalePurchaseTransactions({
                 {isEditing ? (
                   <div className="grid border-t border-neutral-200 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
                     <div className="border-b border-neutral-200 p-4 lg:border-b-0 lg:border-r">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Drinks</p>
-                      <ul className="mt-2 divide-y divide-neutral-100">
-                        {costing.drinks.length === 0 ? (
-                          <li className="py-2 text-sm text-neutral-500">Tap a drink below to add it.</li>
-                        ) : (
-                          costing.drinks.map((drink) => (
-                            <li key={drink} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                              <span className="min-w-0 truncate">{drink}</span>
-                              <button
-                                type="button"
-                                onClick={() => toggleCostingDrink(costingIndex, drink)}
-                                className="shrink-0 text-xs text-neutral-400 hover:text-red-600"
-                              >
-                                Remove
-                              </button>
-                            </li>
-                          ))
-                        )}
-                      </ul>
-                      {unassignedMenuDrinks.length > 0 ? (
-                        <div className="mt-4">
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Add</p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {unassignedMenuDrinks.map((drink) => (
-                              <button
-                                key={drink.id}
-                                type="button"
-                                onClick={() => addDrinkToCosting(costingIndex, drink.name)}
-                                className="rounded-full border border-dashed border-neutral-300 px-2.5 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
-                              >
-                                + {drink.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Drinks</p>
+                        <button
+                          type="button"
+                          onClick={() => setShowDrinkSearch((visible) => !visible)}
+                          className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+                        >
+                          Search
+                        </button>
+                      </div>
+                      {showDrinkSearch ? (
+                        <input
+                          value={drinkSearch}
+                          onChange={(event) => setDrinkSearch(event.target.value)}
+                          placeholder="Search drinks"
+                          aria-label="Search drinks"
+                          className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+                        />
                       ) : null}
+                      {drinkCategories.length > 0 ? (
+                        <label className="mt-3 block">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Category</span>
+                          <select
+                            value={selectedDrinkCategories[0] ?? ""}
+                            onChange={(event) => setSelectedDrinkCategories(event.target.value ? [event.target.value] : [])}
+                            aria-label="Filter drinks by category"
+                            className="mt-2 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-700"
+                          >
+                            <option value="">All categories</option>
+                            {drinkCategories.map((category) => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <div className="mt-4 border-t border-neutral-100 pt-3">
+                        {filteredUnassignedMenuDrinks.length > 0 || menuDrinks.some((drink) => costing.drinks.includes(drink.name)) ? (
+                          <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {menuDrinks
+                              .filter((drink) => {
+                                const query = drinkSearch.trim().toLowerCase();
+                                const matchesSearch = !query || drink.name.toLowerCase().includes(query);
+                                const matchesCategory = selectedDrinkCategories.length === 0 || selectedDrinkCategories.includes(drink.category);
+                                return matchesSearch && matchesCategory;
+                              })
+                              .map((drink) => {
+                                const drinkKey = drink.name.trim().toLowerCase();
+                                const isChecked = costing.drinks.some((name) => name.trim().toLowerCase() === drinkKey);
+                                const isAssignedToAnotherCosting = recipeCostings.some(
+                                  (otherCosting, otherIndex) => otherIndex !== costingIndex && otherCosting.drinks.some((name) => name.trim().toLowerCase() === drinkKey),
+                                );
+                                return (
+                                  <label
+                                    key={drink.id}
+                                    title={isAssignedToAnotherCosting ? "Already assigned to another costing" : undefined}
+                                    className={`flex min-w-0 items-center gap-2 text-sm ${isChecked ? "text-neutral-900" : isAssignedToAnotherCosting ? "cursor-not-allowed text-neutral-300" : "text-neutral-400"}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      disabled={isAssignedToAnotherCosting}
+                                      onChange={() => toggleCostingDrink(costingIndex, drink.name)}
+                                      className="h-4 w-4 shrink-0 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                    <span className="truncate">{drink.name}</span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-neutral-500">No drinks match your filters.</p>
+                        )}
+                      </div>
                       {showOtherDrink ? (
                         <div className="mt-3 flex gap-2">
                           <input
@@ -1200,7 +1255,22 @@ export function SalePurchaseTransactions({
 
                     <div className="p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">Ingredients for 1 cup</p>
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {(["hotCupInventoryItemId", "icedCupInventoryItemId", "otherCupInventoryItemId"] as const).map((field) => (
+                          <label key={field} className="text-xs text-neutral-600">
+                            {field === "hotCupInventoryItemId" ? "Hot cup" : field === "icedCupInventoryItemId" ? "Iced cup" : "Other cup"}
+                            <select
+                              value={costing[field] ?? ""}
+                              onChange={(event) => updateCosting(costingIndex, { [field]: event.target.value || undefined })}
+                              className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-800"
+                            >
+                              <option value="">Select cup item</option>
+                              {store.inventory.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-3 space-y-2">
                         {costing.ingredients.map((ingredient, ingredientIndex) => (
                           <div key={ingredientIndex} className="grid grid-cols-[minmax(0,1fr)_5.5rem_4.5rem_auto] items-start gap-2">
                             <div>

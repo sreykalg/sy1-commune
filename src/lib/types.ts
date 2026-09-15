@@ -143,6 +143,9 @@ export type RecipeCosting = {
   name: string;
   drinks: string[];
   ingredients: RecipeIngredient[];
+  hotCupInventoryItemId?: string;
+  icedCupInventoryItemId?: string;
+  otherCupInventoryItemId?: string;
 };
 
 export type UsageLog = {
