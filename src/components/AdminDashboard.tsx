@@ -662,7 +662,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
           <Metric
             label="Peak Hour"
             value={peak && peak.orders > 0 ? peak.label : "—"}
-            hint={peak && peak.orders > 0 ? `${peak.orders} items · ${formatMoney(peak.sales)}` : "Selected period"}
           />
 
           {rangeType === "week" && (
