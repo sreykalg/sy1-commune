@@ -218,12 +218,16 @@ export function PosClient({
 
   // Helper function to normalize category strings (combines "Non Coffee" and "Non-Coffee")
   const normalizeCat = (catName: string) => catName.replace(/^non\s*coffee$/i, "Non-Coffee");
+  const isAddOnCategory = (catName: string) => {
+    const normalized = catName.replace(/[^a-z]/gi, "").toLowerCase();
+    return normalized === "addons" || normalized === "addson";
+  };
 
   // Deduplicate categories for the filter buttons
   const floorCategories = useMemo(() => {
     const set = new Set<string>();
     categories.forEach((cat) => {
-      if (cat.trim().toLowerCase() === "add-ons") return;
+      if (isAddOnCategory(cat)) return;
       set.add(normalizeCat(cat));
     });
     return ["All", ...Array.from(set)];
@@ -234,7 +238,7 @@ export function PosClient({
     const needle = query.trim().toLowerCase();
     return menu.filter((item) => {
       if (!item.available) return false;
-      if (item.category.trim().toLowerCase() === "add-ons") return false;
+      if (isAddOnCategory(item.category)) return false;
 
       const itemCatNormalized = normalizeCat(item.category);
       const selectedCatNormalized = normalizeCat(category);
