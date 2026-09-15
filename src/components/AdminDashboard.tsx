@@ -388,8 +388,8 @@ export function AdminDashboard({ store }: { store: StoreData }) {
   const totalSoldQty = drinksQty + foodQty + pastryQty;
   const costByCategory = filteredOrdersList.reduce((totals, order) => {
     order.items.forEach((line) => {
-      const menuItem = store.menu.find((item) => item.id === line.productId);
-      const category = menuItem?.category ?? "Drinks";
+      const menuItem = store.menu.find((item) => item.id === line.productId) ?? store.menu.find((item) => item.name.trim().toLowerCase() === line.name.trim().toLowerCase());
+      const category = menuItem?.category ?? "Other";
       const lineCost = ingredientsForOrderLine(store, line).reduce((sum, ingredient) => {
         const inventoryItem = store.inventory.find((item) => item.id === ingredient.inventoryItemId);
         if (!inventoryItem) return sum;

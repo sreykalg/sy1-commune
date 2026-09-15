@@ -126,10 +126,11 @@ export function productStats(
 
   for (const order of liveOrders(orders)) {
     for (const line of order.items) {
+      const matchingMenuItem = map.get(line.productId) ?? menu.find((item) => item.name.trim().toLowerCase() === line.name.trim().toLowerCase());
       const current = map.get(line.productId) ?? {
         id: line.productId,
         name: line.name,
-        category: "Other",
+        category: matchingMenuItem?.category ?? "Other",
         qty: 0,
         sales: 0,
       };
@@ -147,7 +148,7 @@ export function productStats(
 export function drinkProductStats(stats: ProductStat[]): ProductStat[] {
   return stats.filter((item) => {
     const category = item.category.replace(/[^a-z]/gi, "").toLowerCase();
-    return category.includes("drink") || category.includes("coffee") || category.includes("beverage") || category.includes("tea");
+    return category !== "other" && category !== "food" && !category.includes("pastr") && category !== "addons" && category !== "addson";
   });
 }
 
