@@ -962,7 +962,6 @@ export function AdminDashboard({ store }: { store: StoreData }) {
         </div>
         {drinksOpen ? (
           <>
-            <p className="mt-1 text-[11px] text-neutral-400">Breakdown for the selected range</p>
             {drinkSoldRows.length === 0 ? (
               <p className="mt-4 py-6 text-center text-sm text-neutral-500">
                 No drinks sold in this range.
