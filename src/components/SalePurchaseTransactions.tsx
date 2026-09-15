@@ -1191,17 +1191,23 @@ export function SalePurchaseTransactions({
                                 return matchesSearch && matchesCategory;
                               })
                               .map((drink) => {
-                                const isChecked = costing.drinks.includes(drink.name);
+                                const drinkKey = drink.name.trim().toLowerCase();
+                                const isChecked = costing.drinks.some((name) => name.trim().toLowerCase() === drinkKey);
+                                const isAssignedToAnotherCosting = recipeCostings.some(
+                                  (otherCosting, otherIndex) => otherIndex !== costingIndex && otherCosting.drinks.some((name) => name.trim().toLowerCase() === drinkKey),
+                                );
                                 return (
                                   <label
                                     key={drink.id}
-                                    className={`flex min-w-0 items-center gap-2 text-sm ${isChecked ? "text-neutral-900" : "text-neutral-400"}`}
+                                    title={isAssignedToAnotherCosting ? "Already assigned to another costing" : undefined}
+                                    className={`flex min-w-0 items-center gap-2 text-sm ${isChecked ? "text-neutral-900" : isAssignedToAnotherCosting ? "cursor-not-allowed text-neutral-300" : "text-neutral-400"}`}
                                   >
                                     <input
                                       type="checkbox"
                                       checked={isChecked}
+                                      disabled={isAssignedToAnotherCosting}
                                       onChange={() => toggleCostingDrink(costingIndex, drink.name)}
-                                      className="h-4 w-4 shrink-0 accent-blue-600"
+                                      className="h-4 w-4 shrink-0 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                     <span className="truncate">{drink.name}</span>
                                   </label>
