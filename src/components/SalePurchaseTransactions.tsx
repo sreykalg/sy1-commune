@@ -1591,7 +1591,7 @@ export function SalePurchaseTransactions({
                           </button>
                         </div>
                       </td>
-                      
+
                       <td className="p-3 text-center">
                         <RowActions
                           editLabel={`Edit ${s.name}`}
@@ -1600,6 +1600,7 @@ export function SalePurchaseTransactions({
                           onDelete={() => void handleDeleteStock(s.id)}
                           onDeleteMouseDown={(event) => event.preventDefault()}
                         />
+                        
                       </td>
                     </tr>
                   );
