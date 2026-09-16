@@ -10,6 +10,16 @@ function inventoryUsagePerPiece(item: StockItem, used: number) {
   return unitSize > 0 ? `${(used / unitSize).toFixed(2)} pc` : "—";
 }
 
+function configuredUsagePerUnit(item: StockItem) {
+  const usage = Number(item.cupUsageAmount);
+  return usage > 0 ? usage : 0;
+}
+
+function configuredCupsLeft(item: StockItem, remaining: number) {
+  const usage = configuredUsagePerUnit(item);
+  return usage > 0 ? remaining / usage : null;
+}
+
 function pieceSize(item: Pick<StockItem, "purchaseUnitSize">) {
   const size = Number(item.purchaseUnitSize);
   return size > 0 ? size : 1;
@@ -275,8 +285,13 @@ export function SalePurchaseTransactions({
     cupUsageAmount: item.cupUsageAmount,
     cupsMake: item.cupsMake,
   }));
+  const loggedOrderIds = new Set(
+    (store.usageLogs ?? [])
+      .map((entry) => entry.orderId)
+      .filter((orderId): orderId is string => Boolean(orderId)),
+  );
   const orderUsageRows = store.orders
-    .filter((order) => !order.voided)
+    .filter((order) => !order.voided && !loggedOrderIds.has(order.id))
     .flatMap((order) => order.items.flatMap((line) => ingredientsForOrderLine(store, line).map((ingredient, ingredientIndex) => ({
       id: `${order.id}-${line.productId}-${ingredientIndex}`,
       orderId: order.id,
@@ -286,9 +301,7 @@ export function SalePurchaseTransactions({
       unit: ingredient.unit,
       soldAs: orderSoldAsLabel(order.items),
     }))));
-  const reconstructedOrderIds = new Set(orderUsageRows.map((row) => row.orderId));
   const extraUsageLogs = (store.usageLogs ?? [])
-    .filter((entry) => entry.orderId && !reconstructedOrderIds.has(entry.orderId))
     .map((entry) => {
       const order = store.orders.find((item) => item.id === entry.orderId);
       return {
@@ -538,6 +551,14 @@ export function SalePurchaseTransactions({
 
   const handleTotalUsedChange = (itemName: string, value: string) => {
     const nextTotal = Math.max(0, Number(value) || 0);
+    const stockIndex = stocks.findIndex((item) => namesMatch(item.name, itemName));
+    if (stockIndex >= 0) {
+      const nextStocks = stocks.map((item, index) =>
+        index === stockIndex ? { ...item, cupUsageAmount: nextTotal || undefined } : item,
+      );
+      setStocks(nextStocks);
+      void persistInventory(nextStocks);
+    }
     setUsages((currentUsages) => {
       const matching = currentUsages.filter((usage) => namesMatch(usage.itemName, itemName) && phDateString(usage.date) === getTodayDate());
       const next = (() => {
@@ -964,10 +985,11 @@ export function SalePurchaseTransactions({
     return day >= rangeStart && day <= rangeEnd;
   }
 
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesKw = t.productName.toLowerCase().includes(filterKeyword.toLowerCase());
-    return matchesKw && inDateRange(t.date);
+  const transactionsInRange = transactions.filter((transaction) => inDateRange(transaction.date));
+  const filteredTransactions = transactionsInRange.filter((t) => {
+    return t.productName.toLowerCase().includes(filterKeyword.toLowerCase());
   });
+  const hasTransactionsInRange = transactionsInRange.length > 0;
 
   const usageGroups = useMemo(() => {
     const keyword = filterKeyword.trim().toLowerCase();
@@ -1495,11 +1517,13 @@ export function SalePurchaseTransactions({
                   });
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
+                  const configuredUsage = configuredUsagePerUnit(s);
                   const cupsLeft = recipe
-    ? cupsFromQuantity(remaining, recipe)
-    : s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null
-      ? Number(s.cupsMake)
-      : null;
+                    ? cupsFromQuantity(remaining, recipe)
+                    : configuredCupsLeft(s, remaining) ??
+                      (s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null
+                        ? Number(s.cupsMake)
+                        : null);
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
@@ -1725,10 +1749,12 @@ export function SalePurchaseTransactions({
                   const ing = c.ingredients[0];
                   const stock = stocks.find((item) => namesMatch(item.name, c.productName) || (ing ? namesMatch(item.name, ing.name) : false));
                   const remaining = stock?.stock ?? 0;
-                  const used = usages
-                    .filter((entry) => inDateRange(entry.date))
-                    .filter((entry) => namesMatch(entry.itemName, c.productName) || (ing ? namesMatch(entry.itemName, ing.name) : false))
-                    .reduce((sum, entry) => sum + entry.usedAmount, 0);
+                  const used = hasTransactionsInRange
+                    ? usages
+                        .filter((entry) => inDateRange(entry.date))
+                        .filter((entry) => namesMatch(entry.itemName, c.productName) || (ing ? namesMatch(entry.itemName, ing.name) : false))
+                        .reduce((sum, entry) => sum + entry.usedAmount, 0)
+                    : 0;
                   const perCup = ing ? perCupAmount(ing) : 0;
                   const cupsLeft = ing ? cupsFromQuantity(remaining, ing) : 0;
                   const cupsUsed = ing ? cupsFromQuantity(used, ing) : 0;

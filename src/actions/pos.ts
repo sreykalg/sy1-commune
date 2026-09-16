@@ -18,6 +18,10 @@ import type {
   StoreData,
 } from "@/lib/types";
 
+function isMissingOrderTable(error: { code?: string; message?: string }) {
+  return error.code === "PGRST205" || /orders|order_items.*schema cache|relation .*orders|relation .*order_items/i.test(error.message ?? "");
+}
+
 async function requirePos() {
   const session = await getSession();
   if (!session || !canUsePos(session.role)) {
@@ -357,6 +361,11 @@ export async function createOrder(
   });
 
   if (error) return { ok: false as const, error };
+
+  const orderToPersist = createdOrder as Order | null;
+  if (!orderToPersist) {
+    return { ok: false as const, error: "Unable to create the order." };
+  }
 
   revalidatePath("/pos");
   revalidatePath("/admin");

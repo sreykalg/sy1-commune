@@ -53,8 +53,12 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
   const [adminGate, setAdminGate] = useState(loginGates.admin);
   const [cashierGate, setCashierGate] = useState(loginGates.cashier);
 
-  const editing = users.find((user) => user.id === editingId) ?? null;
-  const floorStaff = users.filter((user) => user.role !== "admin");
+  const uniqueUsers = useMemo(
+    () => Array.from(new Map(users.map((user) => [user.id, user])).values()),
+    [users],
+  );
+  const editing = uniqueUsers.find((user) => user.id === editingId) ?? null;
+  const floorStaff = uniqueUsers.filter((user) => user.role !== "admin");
   const sessions = useMemo(() => pairLoginSessions(loginActivity), [loginActivity]);
   const requests = useMemo(
     () => [...offRequests].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
@@ -242,7 +246,7 @@ export function UserManager({ users, session, loginActivity, offRequests, loginG
             ) : null}
 
             <div className="divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-              {users.map((user) => (
+              {uniqueUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
