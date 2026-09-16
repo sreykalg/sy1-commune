@@ -70,7 +70,14 @@ type PosClientProps = {
   voidRequests: VoidRequest[];
   inventoryStore: Pick<
     StoreData,
-    "orders" | "inventory" | "usageLogs" | "restocks" | "costings"
+    | "orders"
+    | "inventory"
+    | "usageLogs"
+    | "restocks"
+    | "costings"
+    | "recipes"
+    | "recipeCostings"
+    | "menu"
   >;
 };
 
