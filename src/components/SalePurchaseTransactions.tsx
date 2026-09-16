@@ -1678,7 +1678,7 @@ export function SalePurchaseTransactions({
                           onDelete={() => void handleDeleteStock(s.id)}
                           onDeleteMouseDown={(event) => event.preventDefault()}
                         />
-                        
+
                       </td>
                     </tr>
                   );
@@ -1795,6 +1795,7 @@ export function SalePurchaseTransactions({
                       onClick={() => setCostingIngs(costingIngs.filter((_, i) => i !== idx))}
                       className={`${iconBtn} hover:bg-red-50 hover:text-red-600`}
                     >
+                      
                       <TrashIcon />
                     </button>
                   </div>
