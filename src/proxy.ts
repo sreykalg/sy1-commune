@@ -6,26 +6,26 @@ export function proxy(request: NextRequest) {
   const session = decodeSession(request.cookies.get(SESSION_COOKIE)?.value);
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/login") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (pathname.startsWith("/pos")) {
     if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
-    if (session.role !== "barista") {
+    if (session.role !== "cashier" && session.role !== "manager") {
       return NextResponse.redirect(new URL(homeForRole(session.role), request.url));
     }
   }
 
   if (pathname.startsWith("/admin")) {
     if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
     if (session.role !== "admin") {
       return NextResponse.redirect(new URL(homeForRole(session.role), request.url));
     }
-  }
-
-  if (pathname === "/login" && session) {
-    return NextResponse.redirect(new URL(homeForRole(session.role), request.url));
   }
 
   return NextResponse.next();

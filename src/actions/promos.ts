@@ -8,8 +8,8 @@ import type { Promotion } from "@/lib/types";
 
 async function requireBarista() {
   const session = await getSession();
-  if (!session || session.role !== "barista") {
-    throw new Error("Only the barista can edit promotions.");
+  if (!session || session.role !== "cashier") {
+    throw new Error("Only a cashier can edit promotions.");
   }
   return session;
 }

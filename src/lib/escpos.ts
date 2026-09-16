@@ -1,14 +1,17 @@
 import { CAFE } from "@/lib/cafe";
 import { ordersOnDay } from "@/lib/analytics";
 import { paymentLabel } from "@/lib/payments";
-import type { Order, OrderItem, PaymentMethod } from "@/lib/types";
+import { drinkDisplayName, orderLineOptionsLabel } from "@/lib/menu";
+import type { MenuItem, Order, OrderItem, PaymentMethod } from "@/lib/types";
 
 export type PaperWidth = 58 | 80;
+
+export type ReceiptItem = OrderItem;
 
 export type ReceiptTicket = {
   ticketNo: string;
   barista: string;
-  items: OrderItem[];
+  items: ReceiptItem[];
   subtotal: number;
   discount: number;
   promoLabel?: string;
@@ -67,7 +70,11 @@ export function ticketNoForOrder(orders: Order[], order: Order): string {
   return String(Math.max(index, 0) + 1).padStart(3, "0");
 }
 
-export function receiptFromOrder(order: Order, orders: Order[] = []): ReceiptTicket {
+export function receiptFromOrder(
+  order: Order,
+  orders: Order[] = [],
+  menu: MenuItem[] = [],
+): ReceiptTicket {
   const subtotal =
     order.subtotal ??
     order.items.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -77,7 +84,12 @@ export function receiptFromOrder(order: Order, orders: Order[] = []): ReceiptTic
   return {
     ticketNo: ticketNoForOrder(orders, order),
     barista: order.baristaName,
-    items: order.items,
+    items: order.items.map((item) => ({
+      ...item,
+      category:
+        item.category ??
+        menu.find((menuItem) => menuItem.id === item.productId)?.category,
+    })),
     subtotal,
     discount: order.discount ?? 0,
     promoLabel: order.promoLabel,
@@ -105,6 +117,20 @@ export function receiptWhen(date: Date): string {
 
 export function itemCount(items: OrderItem[]): number {
   return items.reduce((sum, item) => sum + item.qty, 0);
+}
+
+export function isDrinkCategory(category?: string): boolean {
+  return Boolean(category && !/food|pastr/i.test(category));
+}
+
+export function drinkReceipts(ticket: ReceiptTicket): ReceiptTicket[] {
+  return ticket.items.flatMap((item) => {
+    if (!isDrinkCategory(item.category)) return [];
+    return Array.from({ length: item.qty }, () => ({
+      ...ticket,
+      items: [{ ...item, qty: 1 }],
+    }));
+  });
 }
 
 function toPrinterText(value: string): string {
@@ -198,13 +224,17 @@ export function customerLines(
     ...shopHeader(logo),
     { kind: "text", text: `Order No. ${ticket.ticketNo}`, align: 1, size: "tall", bold: true },
     { kind: "text", text: receiptWhen(ticket.at), align: 1 },
-    { kind: "text", text: `Barista: ${ticket.barista}`, align: 1 },
+    { kind: "text", text: `Cashier: ${ticket.barista}`, align: 1 },
     { kind: "rule" },
     { kind: "text", text: padLine("Item", "Amount", width), bold: true },
   ];
 
   for (const item of ticket.items) {
-    lines.push({ kind: "text", text: item.name });
+    lines.push({ kind: "text", text: drinkDisplayName(item) });
+    const options = orderLineOptionsLabel(item);
+    if (options) {
+      lines.push({ kind: "text", text: `  ${options}` });
+    }
     lines.push({
       kind: "text",
       text: padLine(
@@ -240,19 +270,19 @@ export function customerLines(
   if (ticket.paid && ticket.paid > 0) {
     lines.push({ kind: "rule" });
     const method = paymentLabel(ticket.paymentMethod);
+    lines.push({
+      kind: "text",
+      text: padLine("Payment", method, width),
+    });
     if (ticket.paymentMethod === "gcash" || ticket.paymentMethod === "maya") {
       lines.push({
         kind: "text",
-        text: padLine("Pay", method, width),
-      });
-      lines.push({
-        kind: "text",
-        text: padLine(method, receiptMoney(ticket.paid), width),
+        text: padLine("Paid", receiptMoney(ticket.paid), width),
       });
     } else {
       lines.push({
         kind: "text",
-        text: padLine("Cash", receiptMoney(ticket.paid), width),
+        text: padLine("Cash / Tendered", receiptMoney(ticket.paid), width),
       });
       lines.push({
         kind: "text",
@@ -270,7 +300,7 @@ export function customerLines(
   return lines;
 }
 
-export function baristaLines(ticket: ReceiptTicket, width: number): PrintLine[] {
+export function baristaLines(ticket: ReceiptTicket): PrintLine[] {
   const drinks = itemCount(ticket.items);
   const lines: PrintLine[] = [
     { kind: "text", text: "MAKE THESE DRINKS", align: 1, bold: true },
@@ -283,11 +313,15 @@ export function baristaLines(ticket: ReceiptTicket, width: number): PrintLine[] 
 
   for (const item of ticket.items) {
     const qty = `${item.qty}x`;
-    const name = item.name.toUpperCase();
+    const name = drinkDisplayName(item).toUpperCase();
+    const options = orderLineOptionsLabel(item);
     lines.push({
       kind: "text",
       text: `${qty.padEnd(4, " ")} ${name}`,
     });
+    if (options) {
+      lines.push({ kind: "text", text: `     ${options.toUpperCase()}` });
+    }
   }
 
   lines.push({ kind: "rule" });
@@ -314,18 +348,16 @@ export function encodeBaristaTicket(
   paperWidth: PaperWidth,
 ): Uint8Array {
   const width = paperColumns(paperWidth);
-  return buildBytes(baristaLines(ticket, width), width);
+  return buildBytes(baristaLines(ticket), width);
 }
 
 export function encodeOrderSlips(
   ticket: ReceiptTicket,
   paperWidth: PaperWidth,
-  logo?: Uint8Array,
 ): Uint8Array[] {
-  return [
-    encodeCustomerReceipt(ticket, paperWidth, logo),
-    encodeBaristaTicket(ticket, paperWidth),
-  ];
+  return drinkReceipts(ticket).map((drinkTicket) =>
+    encodeBaristaTicket(drinkTicket, paperWidth),
+  );
 }
 
 export function sampleTicket(now = new Date()): ReceiptTicket {
@@ -333,8 +365,20 @@ export function sampleTicket(now = new Date()): ReceiptTicket {
     ticketNo: "001",
     barista: "Sale In Charge",
     items: [
-      { productId: "spanish-latte", name: "Spanish Latte", qty: 2, price: 149 },
-      { productId: "matcha-umami", name: "Matcha Umami", qty: 1, price: 169 },
+      {
+        productId: "spanish-latte",
+        name: "Spanish Latte",
+        qty: 2,
+        price: 149,
+        category: "Special",
+      },
+      {
+        productId: "matcha-umami",
+        name: "Matcha Umami",
+        qty: 1,
+        price: 169,
+        category: "Matcha Drinks",
+      },
     ],
     subtotal: 467,
     discount: 0,

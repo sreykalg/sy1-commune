@@ -5,27 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { CAFE } from "@/lib/cafe";
 import { SocialLinks } from "@/components/SocialLinks";
-import type { Session } from "@/lib/types";
-
-type SiteNavProps = {
-  session: Session | null;
-};
 
 const ghost =
   "rounded-full px-4 py-2 text-[11px] font-medium tracking-[0.2em] text-white/90 uppercase transition hover:bg-white/15 sm:px-5";
 
-export function SiteNav({ session }: SiteNavProps) {
+export function SiteNav() {
   const [open, setOpen] = useState(false);
-  const staffHref = session
-    ? session.role === "admin"
-      ? "/admin"
-      : "/pos"
-    : "/login";
-  const staffLabel = session
-    ? session.role === "admin"
-      ? "Dashboard"
-      : "POS"
-    : "Login";
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -78,12 +63,6 @@ export function SiteNav({ session }: SiteNavProps) {
               {link.label}
             </Link>
           ))}
-          <Link
-            href={staffHref}
-            className="shrink-0 rounded-full bg-white px-5 py-2 text-[11px] font-semibold tracking-[0.2em] text-black uppercase transition hover:bg-neutral-200"
-          >
-            {staffLabel}
-          </Link>
         </div>
       </nav>
 
@@ -144,13 +123,6 @@ export function SiteNav({ session }: SiteNavProps) {
                     {link.label}
                   </Link>
                 ))}
-                <Link
-                  href={staffHref}
-                  onClick={() => setOpen(false)}
-                  className="mt-1 mb-1 block rounded-full bg-white px-4 py-2.5 text-center text-[11px] font-semibold tracking-[0.2em] text-black uppercase"
-                >
-                  {staffLabel}
-                </Link>
               </nav>
               <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
                 <p className="text-[10px] tracking-[0.28em] text-neutral-500 uppercase">

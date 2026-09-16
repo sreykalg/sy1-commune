@@ -1356,12 +1356,30 @@
       "maxStock": 10000
     },
     {
-      "id": "cups",
-      "name": "Cups",
+      "id": "cups-peta",
+      "name": "Peta Cup",
       "category": "Packaging",
       "unit": "pcs",
       "cost": 3,
-      "stock": 197,
+      "stock": 66,
+      "maxStock": 1000
+    },
+    {
+      "id": "cups-daba",
+      "name": "Daba Cup",
+      "category": "Packaging",
+      "unit": "pcs",
+      "cost": 3,
+      "stock": 66,
+      "maxStock": 1000
+    },
+    {
+      "id": "cups-hot",
+      "name": "Hot Cup",
+      "category": "Packaging",
+      "unit": "pcs",
+      "cost": 3,
+      "stock": 65,
       "maxStock": 1000
     },
     {

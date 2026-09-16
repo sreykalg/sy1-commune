@@ -40,6 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${inter.variable} ${playfair.variable} ${script.variable} ${display.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-black font-sans text-white">{children}</body>

@@ -1,12 +1,10 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { put } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { menuItemId } from "@/lib/menu";
-import { updateStore, usesBlobStorage } from "@/lib/store";
+import { addonIdFromName, isFoodOrPastry, menuItemId, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
+import type { DrinkStyle, MenuAddon } from "@/lib/types";
+import { updateStore, uploadPublicMenuPhoto } from "@/lib/store";
 
 const PHOTO_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -16,10 +14,10 @@ const PHOTO_TYPES: Record<string, string> = {
 };
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
-async function requireBarista() {
+async function requireAdmin() {
   const session = await getSession();
-  if (!session || session.role !== "barista") {
-    throw new Error("Only the barista can edit the menu.");
+  if (!session || session.role !== "admin") {
+    throw new Error("Only an admin can edit the menu.");
   }
   return session;
 }
@@ -27,6 +25,7 @@ async function requireBarista() {
 function refresh() {
   revalidatePath("/pos");
   revalidatePath("/admin");
+  revalidatePath("/drinks");
   revalidatePath("/");
 }
 
@@ -34,7 +33,7 @@ function isSafeImage(src: string) {
   return (
     src.startsWith("/images/") ||
     src.startsWith("/uploads/menu/") ||
-    src.includes(".blob.vercel-storage.com/")
+    src.includes(".supabase.co/storage/")
   );
 }
 
@@ -55,19 +54,14 @@ async function saveMenuPhoto(file: File, id: string) {
   const filename = `${safeId}-${Date.now().toString(36)}.${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
 
-  if (usesBlobStorage()) {
-    const blob = await put(`uploads/menu/${filename}`, bytes, {
-      access: "public",
-      addRandomSuffix: false,
-      contentType: file.type,
-    });
-    return { src: blob.url };
+  try {
+    const src = await uploadPublicMenuPhoto(filename, bytes, file.type);
+    return { src };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Could not upload photo.",
+    };
   }
-
-  const dir = path.join(process.cwd(), "public", "uploads", "menu");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), bytes);
-  return { src: `/uploads/menu/${filename}` };
 }
 
 function photoFromForm(formData: FormData) {
@@ -75,8 +69,47 @@ function photoFromForm(formData: FormData) {
   return photo instanceof File && photo.size > 0 ? photo : null;
 }
 
+function stylesFromForm(formData: FormData, category: string): DrinkStyle[] {
+  if (isFoodOrPastry(category)) return [];
+  const selected: DrinkStyle[] = formData.getAll("styles").flatMap((value) => {
+    const style = String(value);
+    return style === "iced" || style === "hot" ? [style] : [];
+  });
+  return normalizeMenuStyles({ category, styles: selected });
+}
+
+function addonsFromForm(formData: FormData): MenuAddon[] {
+  const packed = formData.get("addons");
+  if (typeof packed === "string" && packed.trim()) {
+    try {
+      const parsed = JSON.parse(packed) as MenuAddon[];
+      if (Array.isArray(parsed)) return normalizeMenuAddons({ addons: parsed });
+    } catch {
+      // Fall through to the field list below.
+    }
+  }
+  const names = formData.getAll("addonName").map((value) => String(value ?? "").trim());
+  const prices = formData.getAll("addonPrice").map((value) => String(value ?? "").trim());
+  const ids = formData.getAll("addonId").map((value) => String(value ?? "").trim());
+  const qtyFlags = formData.getAll("addonQtyEnabled").map((value) => String(value ?? "").trim());
+  return normalizeMenuAddons({
+    addons: names.flatMap((name, index) => {
+      if (!name) return [];
+      const price = Number(prices[index]);
+      return [
+        {
+          id: ids[index] || addonIdFromName(name, index),
+          name,
+          price: Number.isFinite(price) ? price : 0,
+          qtyEnabled: qtyFlags[index] === "1",
+        },
+      ];
+    }),
+  });
+}
+
 export async function addMenuCategory(name: string) {
-  await requireBarista();
+  await requireAdmin();
   const category = name.trim();
   if (!category) {
     return { error: "Enter a category name." };
@@ -99,7 +132,7 @@ export async function addMenuCategory(name: string) {
 }
 
 export async function renameMenuCategory(from: string, to: string) {
-  await requireBarista();
+  await requireAdmin();
   const prev = from.trim();
   const next = to.trim();
   if (!prev) return { error: "Category not found." };
@@ -138,7 +171,7 @@ export async function renameMenuCategory(from: string, to: string) {
 }
 
 export async function deleteMenuCategory(name: string) {
-  await requireBarista();
+  await requireAdmin();
   const category = name.trim();
   if (!category) return { error: "Category not found." };
 
@@ -161,10 +194,11 @@ export async function deleteMenuCategory(name: string) {
 }
 
 export async function createMenuItem(formData: FormData) {
-  await requireBarista();
+  await requireAdmin();
   const name = readText(formData, "name");
   const category = readText(formData, "category");
   const price = Number(readText(formData, "price"));
+  const available = readText(formData, "available") !== "false";
   const photo = photoFromForm(formData);
 
   if (!name || !category) {
@@ -175,7 +209,7 @@ export async function createMenuItem(formData: FormData) {
   }
 
   const id = menuItemId(name);
-  let image = "/images/drinks.jpg";
+  let image = "/images/logo.jpg";
   if (photo) {
     const saved = await saveMenuPhoto(photo, id);
     if ("error" in saved && saved.error) return { error: saved.error };
@@ -192,7 +226,9 @@ export async function createMenuItem(formData: FormData) {
       price: Math.round(price),
       category,
       image,
-      available: true,
+      available,
+      styles: stylesFromForm(formData, category),
+      addons: addonsFromForm(formData),
     });
   });
   refresh();
@@ -200,11 +236,12 @@ export async function createMenuItem(formData: FormData) {
 }
 
 export async function updateMenuItem(formData: FormData) {
-  await requireBarista();
+  await requireAdmin();
   const id = readText(formData, "id");
   const name = readText(formData, "name");
   const category = readText(formData, "category");
   const price = Number(readText(formData, "price"));
+  const available = readText(formData, "available") !== "false";
   const photo = photoFromForm(formData);
 
   if (!id) return { error: "Item not found." };
@@ -232,10 +269,13 @@ export async function updateMenuItem(formData: FormData) {
     item.name = name;
     item.price = Math.round(price);
     item.category = category;
+    item.available = available;
+    item.styles = stylesFromForm(formData, category);
+    item.addons = addonsFromForm(formData);
     if (uploaded) {
       item.image = uploaded;
     } else if (!isSafeImage(item.image)) {
-      item.image = "/images/drinks.jpg";
+      item.image = "/images/logo.jpg";
     }
     if (!store.categories.some((entry) => entry.toLowerCase() === category.toLowerCase())) {
       store.categories.push(category);
@@ -247,7 +287,7 @@ export async function updateMenuItem(formData: FormData) {
 }
 
 export async function setMenuItemAvailable(id: string, available: boolean) {
-  await requireBarista();
+  await requireAdmin();
   await updateStore((store) => {
     const item = store.menu.find((entry) => entry.id === id);
     if (item) item.available = available;
@@ -257,7 +297,7 @@ export async function setMenuItemAvailable(id: string, available: boolean) {
 }
 
 export async function deleteMenuItem(id: string) {
-  await requireBarista();
+  await requireAdmin();
   await updateStore((store) => {
     store.menu = store.menu.filter((item) => item.id !== id);
   });

@@ -1,7 +1,7 @@
 export const CAFE = {
   name: "commune.",
   tagline: "WE COMMUNE, OVER COFFEE",
-  hours: "11:00AM - 11:00PM",
+  hours: "10:30AM - 11:30PM",
   hoursNote: "DAILY",
   street: "Crispin Atilano St., Tetuan",
   landmark: "near RF Mariano & San Lorenzo entrance",
@@ -19,6 +19,16 @@ export const CAFE = {
       id: "facebook" as const,
       label: "Facebook",
       href: "https://www.facebook.com/p/commune-caf%C3%A9-61582118725483/",
+    },
+    {
+      id: "instagram" as const,
+      label: "Instagram",
+      href: "https://www.instagram.com/commune180",
+    },
+    {
+      id: "tiktok" as const,
+      label: "TikTok",
+      href: "https://www.tiktok.com/@commune.caf",
     },
   ],
 } as const;
