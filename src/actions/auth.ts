@@ -37,6 +37,7 @@ export async function login(
   const user = store.users.find(
     (entry) => entry.username.trim().toLowerCase() === username.toLowerCase(),
   );
+  
   if (!user || !user.password) {
     return { error: "Those credentials do not match a commune staff account." };
   }
