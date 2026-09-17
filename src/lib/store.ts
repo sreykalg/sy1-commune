@@ -492,7 +492,7 @@ export async function uploadPublicMenuPhoto(
 }
 
 async function readStore(): Promise<StoreData> {
-  if (memoryStore) return memoryStore;
+  // if (memoryStore) return memoryStore;
   const supabase = supabaseAdmin();
   const [pos, users, categories, menu, promotions, inventory, orders, orderItems, usageLogs, restocks, costings, costingIngredients, recipes, recipeCostingsRows, recipeCostingMenuItemRows, recipeCostingIngredientRows, offRequestsRows, voidRequestsRows] = await Promise.all([
     supabase.from("pos_state").select("*").eq("id", POS_STATE_ID).maybeSingle(),
@@ -615,7 +615,7 @@ async function readStore(): Promise<StoreData> {
       processedOrderId: row.processed_order_id ?? undefined,
     })),
   });
-  memoryStore = store;
+  // memoryStore = store;
   return store;
 }
 
