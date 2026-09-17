@@ -742,6 +742,32 @@ async function writeStore(store: StoreData): Promise<void> {
       throw new Error(`Unable to delete inventory items: ${inventoryDeleteError.message}`);
     }
   }
+
+  //* added - 2
+  const { data: existingOrders, error: orderReadError } = await supabase
+    .from("orders")
+    .select("id");
+
+  if (orderReadError) {
+    throw new Error(`Unable to read orders: ${orderReadError.message}`);
+  }
+
+  const currentOrderIds = new Set(store.orders.map((order) => order.id));
+
+  const orderIdsToDelete = (existingOrders ?? [])
+    .map((row) => row.id)
+    .filter((id) => !currentOrderIds.has(id));
+
+  if (orderIdsToDelete.length > 0) {
+    const { error: orderDeleteError } = await supabase
+      .from("orders")
+      .delete()
+      .in("id", orderIdsToDelete);
+
+    if (orderDeleteError) {
+      throw new Error(`Unable to delete orders: ${orderDeleteError.message}`);
+    }
+  }
   // --- Parent tables: menu_items, inventory_items, etc. MUST land before recipe/costing rows below ---
   const operations = await Promise.all([
     supabase.from("pos_state").upsert({ id: POS_STATE_ID, is_open: store.pos.isOpen, opened_at: store.pos.openedAt, opened_by_name: store.pos.openedBy, updated_at: new Date().toISOString() }),

@@ -872,26 +872,26 @@ export function SalePurchaseTransactions({
   //   await persistInventory(nextStocks);
   // };
   const updateUnitSetup = async (
-    id: string,
-    field: "purchaseUnitSize" | "unit" | "cupUsageAmount",
-    value: string,
-  ) => {
-    const parsed = field === "unit" ? value.trim() : value === "" ? undefined : Number(value);
-    if (field !== "unit" && parsed !== undefined && (!Number.isFinite(Number(parsed)) || Number(parsed) <= 0)) return;
-    const draft = unitSetupDrafts[id];
-    const nextStocks = stocks.map((item) => {
-      if (item.id !== id) return item;
-      const purchaseUnitSize = draft?.purchaseUnitSize === "" ? undefined : draft?.purchaseUnitSize !== undefined ? Number(draft.purchaseUnitSize) : item.purchaseUnitSize;
-      const cupUsageAmount = draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount;
-      const merged: StockItem = { ...item, purchaseUnitSize, unit: draft?.unit ?? item.unit, cupUsageAmount, [field]: parsed } as StockItem;
-      return {
-        ...merged,
-        cupsMake: merged.purchaseUnitSize && merged.cupUsageAmount ? merged.purchaseUnitSize / merged.cupUsageAmount : undefined,
-      };
-    });
-    setStocks(nextStocks);
-    await persistInventory(nextStocks);
-  };
+  id: string,
+  field: "purchaseUnitSize" | "unit" | "cupUsageAmount",
+  value: string,
+) => {
+  const parsed = field === "unit" ? value.trim() : value === "" ? undefined : Number(value);
+  if (field !== "unit" && parsed !== undefined && (!Number.isFinite(Number(parsed)) || Number(parsed) <= 0)) return;
+  const draft = unitSetupDrafts[id];
+  const nextStocks = stocks.map((item) => {
+    if (item.id !== id) return item;
+    const purchaseUnitSize = draft?.purchaseUnitSize === "" ? undefined : draft?.purchaseUnitSize !== undefined ? Number(draft.purchaseUnitSize) : item.purchaseUnitSize;
+    const cupUsageAmount = draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount;
+    const merged: StockItem = { ...item, purchaseUnitSize, unit: draft?.unit ?? item.unit, cupUsageAmount, [field]: parsed } as StockItem;
+    return {
+      ...merged,
+      cupsMake: merged.purchaseUnitSize && merged.cupUsageAmount ? merged.purchaseUnitSize / merged.cupUsageAmount : undefined,
+    };
+  });
+  setStocks(nextStocks);
+  await persistInventory(nextStocks);
+};
 
   const saveUnitSetup = async () => {
     await persistInventory(stocks);
