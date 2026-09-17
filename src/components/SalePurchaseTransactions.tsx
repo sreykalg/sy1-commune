@@ -141,7 +141,7 @@ function RowActions({
         aria-label={deleteLabel}
         onMouseDown={onDeleteMouseDown}
         onClick={onDelete}
-        className={`${iconBtn} hover:bg-red-50 hover:text-red-600`}
+        className={`${iconBtn} relative z-10 cursor-pointer hover:bg-red-50 hover:text-red-600`}
       >
         <TrashIcon />
       </button>
