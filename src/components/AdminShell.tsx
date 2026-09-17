@@ -32,11 +32,11 @@ export function AdminShell({ session, users, store, children }: AdminShellProps)
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    if (panel !== "transactions" && panel !== "sales" && panel !== "voids" && panel !== "staff") return;
-    const refreshTimer = window.setInterval(() => router.refresh(), 5000);
-    return () => window.clearInterval(refreshTimer);
-  }, [panel, router]);
+  // useEffect(() => {
+  //   if (panel !== "transactions" && panel !== "sales" && panel !== "voids" && panel !== "staff") return;
+  //   const refreshTimer = window.setInterval(() => router.refresh(), 5000);
+  //   return () => window.clearInterval(refreshTimer);
+  // }, [panel, router]);
 
   useEffect(() => {
     setPanel(readSavedPanel());

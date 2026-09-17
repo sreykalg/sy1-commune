@@ -717,7 +717,31 @@ async function writeStore(store: StoreData): Promise<void> {
   if (ordersError) {
     throw new Error(`Unable to save orders: ${ordersError.message}`);
   }
+  //* added 
+  const { data: existingInventory, error: inventoryReadError } = await supabase
+    .from("inventory_items")
+    .select("id");
 
+  if (inventoryReadError) {
+    throw new Error(`Unable to read inventory: ${inventoryReadError.message}`);
+  }
+
+  const currentInventoryIds = new Set(store.inventory.map((item) => item.id));
+
+  const inventoryIdsToDelete = (existingInventory ?? [])
+    .map((row) => row.id)
+    .filter((id) => !currentInventoryIds.has(id));
+
+  if (inventoryIdsToDelete.length > 0) {
+    const { error: inventoryDeleteError } = await supabase
+      .from("inventory_items")
+      .delete()
+      .in("id", inventoryIdsToDelete);
+
+    if (inventoryDeleteError) {
+      throw new Error(`Unable to delete inventory items: ${inventoryDeleteError.message}`);
+    }
+  }
   // --- Parent tables: menu_items, inventory_items, etc. MUST land before recipe/costing rows below ---
   const operations = await Promise.all([
     supabase.from("pos_state").upsert({ id: POS_STATE_ID, is_open: store.pos.isOpen, opened_at: store.pos.openedAt, opened_by_name: store.pos.openedBy, updated_at: new Date().toISOString() }),
@@ -882,7 +906,7 @@ async function writeStore(store: StoreData): Promise<void> {
   const childInsertError = childInsertResults.find((r) => r.error)?.error;
   if (childInsertError) throw new Error(`Unable to save recipe/costing children: ${childInsertError.message}`);
 
-  memoryStore = store;
+  // memoryStore = store;
 }
 
 function withStore<T>(fn: (store: StoreData) => Promise<T> | T): Promise<T> {
