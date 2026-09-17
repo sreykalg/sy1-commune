@@ -71,7 +71,6 @@ export function parseRole(value: string): Role {
   if (normalized === "cashier") return "cashier";
   return "barista";
 }
-
 export function parseLoginRole(value: string): "admin" | "cashier" | null {
   const normalized = value.toLowerCase();
   if (normalized === "admin" || normalized === "cashier") {
