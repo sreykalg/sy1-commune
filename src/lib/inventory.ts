@@ -275,7 +275,7 @@ export function ingredientsForOrderLine(
   });
   const hasConfiguredCup = resolvedRecipe.some((ingredient) => ingredient.inventoryItemId === selectedCup?.id);
   const cupIngredient = selectedCup && !hasConfiguredCup
-    ? [{ inventoryItemId: selectedCup.id, name: selectedCup.name, amount: 1, unit: selectedCup.unit }]
+    ? [{ inventoryItemId: selectedCup.id, name: selectedCup.name, amount: Number(selectedCup.cupUsageAmount) || 0, unit: selectedCup.unit }]
     : [];
 
   return [

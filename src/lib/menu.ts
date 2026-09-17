@@ -75,8 +75,13 @@ export function normalizeMenuAddons(item: Pick<MenuItem, "addons"> | undefined):
   });
 }
 
-export function addonAllowsQty(addon: Pick<MenuAddon, "name" | "qtyEnabled">) {
-  return /espresso|shot/i.test(addon.name);
+// export function addonAllowsQty(addon: Pick<MenuAddon, "name" | "qtyEnabled">) {
+//   return /espresso|shot/i.test(addon.name);
+// }
+export function addonAllowsQty(
+  addon: Pick<MenuAddon, "name" | "qtyEnabled">
+) {
+  return Boolean(addon.qtyEnabled) || /espresso|shot/i.test(addon.name);
 }
 
 export function resolveOrderAddons(

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
-import { costingIngredientForItem, cupsFromQuantity, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
+import { costingIngredientForItem, cupsFromQuantity, cupSkuForItem, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
 import { isFoodOrPastry, orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
 import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
@@ -310,6 +310,20 @@ export function SalePurchaseTransactions({
         soldAs: order ? orderSoldAsLabel(order.items) : "",
       };
     });
+  console.log(
+    "ALL CUP USAGE DEBUG:",
+    extraUsageLogs
+      .filter((entry) =>
+        /daba cup|peta cup|hot cup/i.test(entry.itemName)
+      )
+      .map((entry) => ({
+        itemName: entry.itemName,
+        usedAmount: entry.usedAmount,
+        unit: entry.unit,
+        orderId: entry.orderId,
+      }))
+  );
+  
   const sourceUsages = aggregateUsageRows([...orderUsageRows, ...extraUsageLogs]);
   const reconstructedRemaining = remainingForUsages(
     sourceUsages,
@@ -639,46 +653,71 @@ export function SalePurchaseTransactions({
   const [openUsageOrders, setOpenUsageOrders] = useState<string[]>([]);
 
   const handleTotalUsedChange = (itemName: string, value: string) => {
-    const nextTotal = Math.max(0, Number(value) || 0);
-    // const stockIndex = stocks.findIndex((item) => namesMatch(item.name, itemName));
-    // if (stockIndex >= 0) {
-    //   const nextStocks = stocks.map((item, index) =>
-    //     index === stockIndex ? { ...item, cupUsageAmount: nextTotal || undefined } : item,
-    //   );
-    //   setStocks(nextStocks);
-    //   void persistInventory(nextStocks);
-    // }
-    setUsages((currentUsages) => {
-      const matching = currentUsages.filter((usage) => namesMatch(usage.itemName, itemName) && phDateString(usage.date) === getTodayDate());
-      const next = (() => {
-        if (matching.length === 0) {
-          return nextTotal === 0
-            ? currentUsages
-            : [{ id: Date.now().toString(), date: getTodayDate(), itemName, usedAmount: nextTotal, unit: stocks.find((item) => namesMatch(item.name, itemName))?.unit || "units", remaining: stocks.find((item) => namesMatch(item.name, itemName))?.stock ?? 0, soldAs: "" }, ...currentUsages];
-        }
-        const firstId = matching[0].id;
-        const otherUsageTotal = matching.slice(1).reduce((sum, usage) => sum + usage.usedAmount, 0);
-        return currentUsages.map((usage) =>
-          usage.id === firstId
-            ? { ...usage, usedAmount: Math.max(0, nextTotal - otherUsageTotal) }
-            : usage,
-        );
-      })();
-      void saveAdminData({
-        usageLogs: next.map((entry) => ({
-          id: entry.id,
-          orderId: store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
-          orderItemId: store.usageLogs.find((item) => item.id === entry.id)?.orderItemId || "",
-          date: entry.date,
-          itemName: entry.itemName,
-          usedAmount: entry.usedAmount,
-          unit: entry.unit,
-          remaining: entry.remaining,
-        })),
-      });
-      return next;
-    });
-  };
+  const nextTotal = Math.max(0, Number(value) || 0);
+
+  const matching = usages.filter(
+    (usage) =>
+      namesMatch(usage.itemName, itemName) &&
+      phDateString(usage.date) === getTodayDate(),
+  );
+
+  const next =
+    matching.length === 0
+      ? nextTotal === 0
+        ? usages
+        : [
+            {
+              id: Date.now().toString(),
+              date: getTodayDate(),
+              itemName,
+              usedAmount: nextTotal,
+              unit:
+                stocks.find((item) => namesMatch(item.name, itemName))?.unit ||
+                "units",
+              remaining:
+                stocks.find((item) => namesMatch(item.name, itemName))?.stock ??
+                0,
+              soldAs: "",
+            },
+            ...usages,
+          ]
+      : (() => {
+          const firstId = matching[0].id;
+
+          const otherUsageTotal = matching
+            .slice(1)
+            .reduce((sum, usage) => sum + usage.usedAmount, 0);
+
+          return usages.map((usage) =>
+            usage.id === firstId
+              ? {
+                  ...usage,
+                  usedAmount: Math.max(
+                    0,
+                    nextTotal - otherUsageTotal,
+                  ),
+                }
+              : usage,
+          );
+        })();
+
+  setUsages(next);
+
+  void saveAdminData({
+    usageLogs: next.map((entry) => ({
+      id: entry.id,
+      orderId:
+        store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
+      orderItemId:
+        store.usageLogs.find((item) => item.id === entry.id)?.orderItemId || "",
+      date: entry.date,
+      itemName: entry.itemName,
+      usedAmount: entry.usedAmount,
+      unit: entry.unit,
+      remaining: entry.remaining,
+    })),
+  });
+};
 
   const applyTransactionInventoryEffect = (
     currentStocks: StockItem[],
@@ -793,6 +832,7 @@ export function SalePurchaseTransactions({
       inventory,
       usageLogs: nextUsages.map((entry) => ({
         id: entry.id,
+        
         orderId:
           store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
         orderItemId:
@@ -1604,13 +1644,30 @@ export function SalePurchaseTransactions({
             <div className="text-xs font-medium text-neutral-500">Total Cups Used</div>
             <div className="mt-1 text-xl font-semibold text-neutral-900">
               {(["Daba Cup", "Peta Cup", "Hot Cup"] as const)
-                .reduce((total, cupName) => {
-                  const cupItem = stocks.find((item) => item.name.trim().toLowerCase() === cupName.toLowerCase());
-                  if (!cupItem) return total;
-                  const ledger = stockLedgerForRange({ itemName: cupItem.name, liveStock: cupItem.stock, from: rangeStart, to: rangeEnd, restocks, usages });
-                  return total + Number(ledger.used || 0);
-                }, 0)
-                .toFixed(2)} cups
+              .reduce((total, cupName) => {
+                const cupItem = stocks.find(
+                  (item) => cupSkuForItem(item)?.name === cupName
+                );
+
+                if (!cupItem) return total;
+
+                // If current Used per Unit is 0, don't count historical usage
+                if ((Number(cupItem.cupUsageAmount) || 0) <= 0) {
+                  return total;
+                }
+
+                const ledger = stockLedgerForRange({
+                  itemName: cupItem.name,
+                  liveStock: cupItem.stock,
+                  from: rangeStart,
+                  to: rangeEnd,
+                  restocks,
+                  usages,
+                });
+
+                return total + Number(ledger.used || 0);
+              }, 0)
+              .toFixed(2)} cups
             </div>
           </div>
           {stockNotice ? <p className="text-sm text-red-600">{stockNotice}</p> : null}
@@ -1668,7 +1725,13 @@ export function SalePurchaseTransactions({
               </thead>
               <tbody>
                 {stocks.map((s) => {
-                  const { opening, restocked, used, remaining } = stockLedgerForRange({
+                  const hasTransactionsInRange = transactions.some(
+                    (tx) =>
+                      inDateRange(tx.date) &&
+                      tx.type === "Sale",
+                  );
+
+                  const { opening, restocked, used: ledgerUsed, remaining } = stockLedgerForRange({
                     itemName: s.name,
                     liveStock: s.stock,
                     from: rangeStart,
@@ -1676,6 +1739,8 @@ export function SalePurchaseTransactions({
                     restocks,
                     usages,
                   });
+
+                  const used = hasTransactionsInRange ? ledgerUsed : 0;
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
                   const configuredUsage = configuredUsagePerUnit(s);
@@ -1777,23 +1842,6 @@ export function SalePurchaseTransactions({
 
       {activeTab === "restock" && (
         <div className="space-y-6">
-          <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-400 space-y-4">
-            <h3 className="text-xs font-bold text-neutral-700 uppercase">{editRestockId ? "Edit Restock Record" : "Add Restock Record"}</h3>
-            <form onSubmit={handleSaveRestock} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Item Name</label>
-                <input type="text" placeholder="e.g. Coffee Beans" value={restockItem} onChange={(e) => setRestockItem(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Quantity Added</label>
-                <input type="number" placeholder="0" value={restockQty} onChange={(e) => setRestockQty(e.target.value)} className="w-full bg-white border border-neutral-400 rounded px-3 py-1.5 text-sm" />
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="flex-1 bg-black text-white px-3 py-1.5 rounded text-sm font-medium">{editRestockId ? "Update" : "Add"}</button>
-                <button type="button" onClick={() => { setEditRestockId(null); setRestockItem(""); setRestockQty(""); setRestockDate(getTodayDate()); }} className="border border-neutral-300 bg-white text-black hover:bg-neutral-100 px-3 py-1.5 rounded text-sm font-medium">Clear</button>
-              </div>
-            </form>
-          </div>
 
           <div className="overflow-x-auto rounded-lg border border-neutral-400 bg-white">
             <table className="w-full min-w-[640px] text-left text-sm">

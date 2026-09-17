@@ -547,7 +547,18 @@ async function readStore(): Promise<StoreData> {
       ).values(),
     ),
     categories: (categories.data ?? []).map((row) => row.name),
-    menu: (menu.data ?? []).map((row) => ({ id: row.id, name: row.name, price: row.price, category: (categories.data ?? []).find((category) => category.id === row.category_id)?.name ?? "Other", image: row.image, available: row.available })),
+    menu: (menu.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      price: row.price,
+      category:
+        (categories.data ?? []).find(
+          (category) => category.id === row.category_id
+        )?.name ?? "Other",
+      image: row.image,
+      available: row.available,
+      addons: Array.isArray(row.addons) ? row.addons : [],
+    })),
     promotions: (promotions.data ?? []).map((row) => ({ id: row.id, label: row.label, type: row.type, value: row.value, active: row.active })),
     inventory: (inventory.data ?? []).map((row) => ({
       id: row.id,
@@ -783,7 +794,18 @@ async function writeStore(store: StoreData): Promise<void> {
       { onConflict: "id" },
     ),
     supabase.from("menu_categories").insert(categoriesToWrite),
-    supabase.from("menu_items").upsert(store.menu.map((item) => ({ id: item.id, name: item.name, price: Math.round(item.price), category_id: categoryId.get(item.category.toLowerCase()) ?? "other", image: item.image, available: item.available })), { onConflict: "id" }),
+    supabase.from("menu_items").upsert(
+      store.menu.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: Math.round(item.price),
+        category_id: categoryId.get(item.category.toLowerCase()) ?? "other",
+        image: item.image,
+        available: item.available,
+        addons: normalizeMenuAddons(item),
+      })),
+      { onConflict: "id" }
+    ),
     supabase.from("promotions").upsert(store.promotions.map((promo) => ({ id: promo.id, label: promo.label, type: promo.type, value: Math.round(promo.value), active: promo.active })), { onConflict: "id" }),
     supabase.from("inventory_items").upsert(
       store.inventory.map((item) => ({
