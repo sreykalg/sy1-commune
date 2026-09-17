@@ -164,6 +164,7 @@ export type RestockRecord = {
   itemName: string;
   quantityAdded: number;
   date: string;
+  unit?: string;
 };
 
 export type CostingIngredient = {

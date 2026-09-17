@@ -494,7 +494,7 @@ export async function uploadPublicMenuPhoto(
 async function readStore(): Promise<StoreData> {
   if (memoryStore) return memoryStore;
   const supabase = supabaseAdmin();
-  const [pos, users, categories, menu, promotions, inventory, orders, orderItems, usageLogs, restocks, costings, costingIngredients, recipes] = await Promise.all([
+  const [pos, users, categories, menu, promotions, inventory, orders, orderItems, usageLogs, restocks, costings, costingIngredients, recipes, recipeCostingsRows, recipeCostingMenuItemRows, recipeCostingIngredientRows, offRequestsRows, voidRequestsRows] = await Promise.all([
     supabase.from("pos_state").select("*").eq("id", POS_STATE_ID).maybeSingle(),
     supabase.from("staff_users").select("*").order("created_at"),
     supabase.from("menu_categories").select("*").order("name"),
@@ -508,8 +508,13 @@ async function readStore(): Promise<StoreData> {
     supabase.from("costings").select("*").order("created_at"),
     supabase.from("costing_ingredients").select("*").order("created_at"),
     supabase.from("recipes").select("*").order("created_at"),
+    supabase.from("recipe_costings").select("*").order("created_at"),
+    supabase.from("recipe_costing_menu_items").select("*").order("id"),
+    supabase.from("recipe_costing_ingredients").select("*").order("created_at"),
+    supabase.from("off_requests").select("*").order("created_at"),
+    supabase.from("void_requests").select("*").order("requested_at", { ascending: false }),
   ]);
-  const firstError = [pos, users, categories, menu, promotions, inventory, orders, orderItems, usageLogs, restocks, costings, costingIngredients, recipes].find((result) => result.error)?.error;
+  const firstError = [pos, users, categories, menu, promotions, inventory, orders, orderItems, usageLogs, restocks, costings, costingIngredients, recipes, recipeCostingsRows, recipeCostingMenuItemRows, recipeCostingIngredientRows, offRequestsRows, voidRequestsRows].find((result) => result.error)?.error;
   if (firstError) throw new Error(`Unable to read store data: ${firstError.message}`);
 
   const base = emptyStore();
@@ -544,12 +549,71 @@ async function readStore(): Promise<StoreData> {
     categories: (categories.data ?? []).map((row) => row.name),
     menu: (menu.data ?? []).map((row) => ({ id: row.id, name: row.name, price: row.price, category: (categories.data ?? []).find((category) => category.id === row.category_id)?.name ?? "Other", image: row.image, available: row.available })),
     promotions: (promotions.data ?? []).map((row) => ({ id: row.id, label: row.label, type: row.type, value: row.value, active: row.active })),
-    inventory: (inventory.data ?? []).map((row) => ({ id: row.id, name: row.name, category: row.category, unit: row.unit, cost: Number(row.cost), stock: Number(row.stock), maxStock: Number(row.max_stock) })),
+    inventory: (inventory.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      category: "",
+      unit: row.unit,
+      cost: Number(row.cost),
+      stock: Number(row.stock),
+      maxStock: Number(row.max_stock),
+      openingStock: row.opening_stock != null ? Number(row.opening_stock) : undefined,
+      purchaseUnitSize: row.purchase_unit_size != null ? Number(row.purchase_unit_size) : undefined,
+      cupUsageAmount: row.cup_usage_amount != null ? Number(row.cup_usage_amount) : undefined,
+      cupsMake: row.cups_make != null ? Number(row.cups_make) : undefined,
+    })),
     orders: rows.map((row) => ({ id: row.id, createdAt: row.created_at, baristaName: row.barista_name, items: items.filter((item) => item.order_id === row.id).map((item) => ({ productId: item.product_id_snapshot, name: item.name_snapshot, qty: item.qty, price: item.price_snapshot })), subtotal: row.subtotal, discount: row.discount, promoLabel: row.promo_label ?? undefined, total: row.total, paymentMethod: parsePayment(row.payment_method), ticketNo: row.ticket_no, paid: row.paid, change: row.change, voided: row.voided, voidReason: row.void_reason ?? undefined })),
     usageLogs: (usageLogs.data ?? []).map((row) => ({ id: row.id, orderId: row.order_id ?? "", orderItemId: row.order_item_id ?? "", date: row.created_at, itemName: row.item_name_snapshot, usedAmount: Number(row.used_amount), unit: row.unit })),
-    restocks: (restocks.data ?? []).map((row) => ({ id: row.id, itemName: row.item_name_snapshot, quantityAdded: Number(row.quantity_added), date: row.created_at })),
+    restocks: (restocks.data ?? []).map((row) => ({ id: row.id, itemName: row.item_name_snapshot, quantityAdded: Number(row.quantity_added), date: row.created_at, unit: row.unit ?? undefined })),
     costings: (costings.data ?? []).map((row) => ({ id: row.id, productName: row.product_name, ingredients: (costingIngredients.data ?? []).filter((ingredient) => ingredient.costing_id === row.id).map((ingredient) => ({ name: ingredient.name, amount: Number(ingredient.amount), unit: ingredient.unit, outputCups: ingredient.output_cups })) })),
     recipes: Object.fromEntries((recipes.data ?? []).reduce((entries, row) => { const list = entries.get(row.menu_item_id) ?? []; list.push({ inventoryItemId: row.inventory_item_id, name: "", amount: Number(row.amount), unit: row.unit }); entries.set(row.menu_item_id, list); return entries; }, new Map<string, RecipeIngredient[]>())),
+    recipeCostings: (recipeCostingsRows.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name ?? "",
+      menuItems: (recipeCostingMenuItemRows.data ?? [])
+        .filter((item) => item.recipe_costing_id === row.id)
+        .map((item) => item.menu_item_name),
+      ingredients: (recipeCostingIngredientRows.data ?? [])
+        .filter((ing) => ing.recipe_costing_id === row.id)
+        .map((ing) => ({
+          inventoryItemId: ing.inventory_item_id,
+          name: ing.name,
+          amount: Number(ing.amount),
+          unit: ing.unit,
+        })),
+      hotCupInventoryItemId: row.hot_cup_inventory_item_id ?? undefined,
+      icedCupInventoryItemId: row.iced_cup_inventory_item_id ?? undefined,
+      otherCupInventoryItemId: row.other_cup_inventory_item_id ?? undefined,
+    })),
+
+    //* added 
+    offRequests: (offRequestsRows.data ?? []).map((row) => ({
+      id: row.id,
+      userId: row.user_id ?? "",
+      name: row.name ?? "",
+      date: row.date,
+      reason: row.reason ?? "",
+      status: row.status,
+      createdAt: row.created_at,
+    })),
+    voidRequests: (voidRequestsRows.data ?? []).map((row) => ({
+      id: row.id,
+      requestedAt: row.requested_at,
+      requestedById: row.requested_by_id ?? "",
+      requestedByName: row.requested_by_name ?? "",
+      reason: row.reason ?? "",
+      status: row.status,
+      orderId: row.order_id ?? undefined,
+      items: Array.isArray(row.items) ? row.items : [],
+      subtotal: Number(row.subtotal),
+      discount: Number(row.discount),
+      promoLabel: row.promo_label ?? undefined,
+      total: Number(row.total),
+      paymentMethod: parsePayment(row.payment_method),
+      approvedAt: row.approved_at ?? undefined,
+      approvedByName: row.approved_by_name ?? undefined,
+      processedOrderId: row.processed_order_id ?? undefined,
+    })),
   });
   memoryStore = store;
   return store;
@@ -610,10 +674,7 @@ async function writeStore(store: StoreData): Promise<void> {
   }
 
   const retainedUserIds = new Set(uniqueUsers.map((user) => user.id));
-  const duplicateUserIds = Array.from(
-    new Map<string, string[]>()
-      .entries(),
-  );
+  const duplicateUserIds = Array.from(new Map<string, string[]>().entries());
   for (const row of existingUsers ?? []) {
     const username = String(row.username ?? "").trim().toLowerCase();
     const ids = duplicateUserIds.find(([key]) => key === username)?.[1];
@@ -657,6 +718,7 @@ async function writeStore(store: StoreData): Promise<void> {
     throw new Error(`Unable to save orders: ${ordersError.message}`);
   }
 
+  // --- Parent tables: menu_items, inventory_items, etc. MUST land before recipe/costing rows below ---
   const operations = await Promise.all([
     supabase.from("pos_state").upsert({ id: POS_STATE_ID, is_open: store.pos.isOpen, opened_at: store.pos.openedAt, opened_by_name: store.pos.openedBy, updated_at: new Date().toISOString() }),
     supabase.from("staff_users").upsert(
@@ -673,13 +735,153 @@ async function writeStore(store: StoreData): Promise<void> {
     supabase.from("menu_categories").insert(categoriesToWrite),
     supabase.from("menu_items").upsert(store.menu.map((item) => ({ id: item.id, name: item.name, price: Math.round(item.price), category_id: categoryId.get(item.category.toLowerCase()) ?? "other", image: item.image, available: item.available })), { onConflict: "id" }),
     supabase.from("promotions").upsert(store.promotions.map((promo) => ({ id: promo.id, label: promo.label, type: promo.type, value: Math.round(promo.value), active: promo.active })), { onConflict: "id" }),
-    supabase.from("inventory_items").upsert(store.inventory.map((item) => ({ id: item.id, name: item.name, category: item.category, unit: item.unit, cost: item.cost, stock: item.stock, max_stock: item.maxStock })), { onConflict: "id" }),
+    supabase.from("inventory_items").upsert(
+      store.inventory.map((item) => ({
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        cost: item.cost,
+        stock: item.stock,
+        max_stock: item.maxStock,
+        opening_stock: item.openingStock ?? null,
+        purchase_unit_size: item.purchaseUnitSize ?? null,
+        cup_usage_amount: item.cupUsageAmount ?? null,
+        cups_make: item.cupsMake ?? null,
+      })),
+      { onConflict: "id" },
+    ),
     supabase.from("order_items").upsert(store.orders.flatMap((order) => order.items.map((item, index) => ({ id: `${order.id}-item-${index + 1}`, order_id: order.id, menu_item_id: item.productId, product_id_snapshot: item.productId, name_snapshot: item.name, qty: item.qty, price_snapshot: item.price }))), { onConflict: "id" }),
     supabase.from("usage_logs").upsert(store.usageLogs.map((log) => ({ id: log.id, order_id: log.orderId || null, order_item_id: log.orderItemId || null, item_name_snapshot: log.itemName, used_amount: log.usedAmount, unit: log.unit })), { onConflict: "id" }),
-    supabase.from("restocks").upsert(store.restocks.map((record) => ({ id: record.id, item_name_snapshot: record.itemName, quantity_added: record.quantityAdded })), { onConflict: "id" }),
+    supabase.from("restocks").upsert(store.restocks.map((record) => ({ id: record.id, item_name_snapshot: record.itemName, quantity_added: record.quantityAdded, unit: record.unit ?? null })), { onConflict: "id" }),
+    supabase.from("off_requests").upsert(
+      store.offRequests.map((r) => ({
+        id: r.id,
+        user_id: r.userId,
+        name: r.name,
+        date: r.date,
+        reason: r.reason,
+        status: r.status,
+        created_at: r.createdAt,
+      })),
+      { onConflict: "id" },
+    ),
+    supabase.from("void_requests").upsert(
+      store.voidRequests.map((r) => ({
+        id: r.id,
+        requested_at: r.requestedAt,
+        requested_by_id: r.requestedById,
+        requested_by_name: r.requestedByName,
+        reason: r.reason,
+        status: r.status,
+        order_id: r.orderId ?? null,
+        items: r.items,
+        subtotal: r.subtotal,
+        discount: r.discount,
+        promo_label: r.promoLabel ?? null,
+        total: r.total,
+        payment_method: r.paymentMethod,
+        approved_at: r.approvedAt ?? null,
+        approved_by_name: r.approvedByName ?? null,
+        processed_order_id: r.processedOrderId ?? null,
+      })),
+      { onConflict: "id" },
+    ),
   ]);
-  const error = operations.find((result) => result.error)?.error;
-  if (error) throw new Error(`Unable to save store data: ${error.message}`);
+  const operationsError = operations.find((result) => result.error)?.error;
+  if (operationsError) throw new Error(`Unable to save store data: ${operationsError.message}`);
+
+  // --- Recipe/costing tables: safe to write now that parents exist ---
+  const recipeRows = Object.entries(store.recipes).flatMap(([menuItemId, ingredients]) =>
+    ingredients.map((ing, i) => ({
+      id: `${menuItemId}::${ing.inventoryItemId || i}`,
+      menu_item_id: menuItemId,
+      inventory_item_id: ing.inventoryItemId,
+      amount: ing.amount,
+      unit: ing.unit,
+    })),
+  );
+
+  const costingIngredientRows = store.costings.flatMap((c) =>
+    c.ingredients.map((ing, i) => ({
+      id: `${c.id}::ing-${i}`,
+      costing_id: c.id,
+      name: ing.name,
+      amount: ing.amount,
+      unit: ing.unit,
+      output_cups: ing.outputCups ?? null,
+    })),
+  );
+
+  const recipeCostingMenuItemRows = store.recipeCostings.flatMap((c) =>
+    c.menuItems.map((menuItemName) => ({
+      recipe_costing_id: c.id,
+      menu_item_name: menuItemName,
+    })),
+  );
+
+  const recipeCostingIngredientRows = store.recipeCostings.flatMap((c) =>
+    c.ingredients.map((ing, i) => ({
+      id: `${c.id}::ing-${i}`,
+      recipe_costing_id: c.id,
+      inventory_item_id: ing.inventoryItemId,
+      name: ing.name,
+      amount: ing.amount,
+      unit: ing.unit,
+    })),
+  );
+
+  const deleteResults = await Promise.all([
+    supabase.from("recipe_costing_menu_items").delete().gte("id", 0),
+    supabase.from("recipe_costing_ingredients").delete().neq("id", ""),
+    supabase.from("costing_ingredients").delete().neq("id", ""),
+    supabase.from("recipes").delete().neq("id", ""),
+  ]);
+  const deleteError1 = deleteResults.find((r) => r.error)?.error;
+  if (deleteError1) throw new Error(`Unable to clear recipe/costing children: ${deleteError1.message}`);
+
+  const deleteParentResults = await Promise.all([
+    supabase.from("costings").delete().neq("id", ""),
+    supabase.from("recipe_costings").delete().neq("id", ""),
+  ]);
+  const deleteError2 = deleteParentResults.find((r) => r.error)?.error;
+  if (deleteError2) throw new Error(`Unable to clear recipe/costing parents: ${deleteError2.message}`);
+
+  const parentInsertResults = await Promise.all([
+    store.costings.length > 0
+      ? supabase.from("costings").insert(store.costings.map((c) => ({ id: c.id, product_name: c.productName })))
+      : Promise.resolve({ error: null }),
+    store.recipeCostings.length > 0
+      ? supabase.from("recipe_costings").insert(
+          store.recipeCostings.map((c) => ({
+            id: c.id,
+            name: c.name,
+            hot_cup_inventory_item_id: c.hotCupInventoryItemId ?? null,
+            iced_cup_inventory_item_id: c.icedCupInventoryItemId ?? null,
+            other_cup_inventory_item_id: c.otherCupInventoryItemId ?? null,
+          })),
+        )
+      : Promise.resolve({ error: null }),
+  ]);
+  const parentInsertError = parentInsertResults.find((r) => r.error)?.error;
+  if (parentInsertError) throw new Error(`Unable to save costing/recipe-costing parents: ${parentInsertError.message}`);
+
+  const childInsertResults = await Promise.all([
+    costingIngredientRows.length > 0
+      ? supabase.from("costing_ingredients").insert(costingIngredientRows)
+      : Promise.resolve({ error: null }),
+    recipeCostingMenuItemRows.length > 0
+      ? supabase.from("recipe_costing_menu_items").insert(recipeCostingMenuItemRows)
+      : Promise.resolve({ error: null }),
+    recipeCostingIngredientRows.length > 0
+      ? supabase.from("recipe_costing_ingredients").insert(recipeCostingIngredientRows)
+      : Promise.resolve({ error: null }),
+    recipeRows.length > 0
+      ? supabase.from("recipes").insert(recipeRows)
+      : Promise.resolve({ error: null }),
+  ]);
+  const childInsertError = childInsertResults.find((r) => r.error)?.error;
+  if (childInsertError) throw new Error(`Unable to save recipe/costing children: ${childInsertError.message}`);
+
   memoryStore = store;
 }
 
@@ -699,13 +901,23 @@ export function getStore(): Promise<StoreData> {
   return withStore((store) => store);
 }
 
+// export function updateStore(
+//   fn: (store: StoreData) => void,
+// ): Promise<StoreData> {
+//   return withStore(async (store) => {
+//     fn(store);
+//     await writeStore(store);
+//     return store;
+//   });
+// }
 export function updateStore(
   fn: (store: StoreData) => void,
 ): Promise<StoreData> {
   return withStore(async (store) => {
-    fn(store);
-    await writeStore(store);
-    return store;
+    const draft = structuredClone(store);
+    fn(draft);
+    await writeStore(draft);
+    return draft;
   });
 }
 

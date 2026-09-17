@@ -201,6 +201,7 @@ type RestockRecord = {
   itemName: string;
   quantityAdded: number;
   date: string;
+  unit?: string;
 };
 
   type CostingItem = {
@@ -530,10 +531,21 @@ export function SalePurchaseTransactions({
     setEditingCostingIndex(0);
   }
 
+  // async function handleSaveRecipes() {
+  //   setSavingRecipes(true);
+  //   try {
+  //     await saveCostings();
+  //   } finally {
+  //     setSavingRecipes(false);
+  //   }
+  // }
   async function handleSaveRecipes() {
     setSavingRecipes(true);
     try {
       await saveCostings();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to save recipes. Check the console for details.");
+      console.error(error);
     } finally {
       setSavingRecipes(false);
     }
@@ -628,14 +640,14 @@ export function SalePurchaseTransactions({
 
   const handleTotalUsedChange = (itemName: string, value: string) => {
     const nextTotal = Math.max(0, Number(value) || 0);
-    const stockIndex = stocks.findIndex((item) => namesMatch(item.name, itemName));
-    if (stockIndex >= 0) {
-      const nextStocks = stocks.map((item, index) =>
-        index === stockIndex ? { ...item, cupUsageAmount: nextTotal || undefined } : item,
-      );
-      setStocks(nextStocks);
-      void persistInventory(nextStocks);
-    }
+    // const stockIndex = stocks.findIndex((item) => namesMatch(item.name, itemName));
+    // if (stockIndex >= 0) {
+    //   const nextStocks = stocks.map((item, index) =>
+    //     index === stockIndex ? { ...item, cupUsageAmount: nextTotal || undefined } : item,
+    //   );
+    //   setStocks(nextStocks);
+    //   void persistInventory(nextStocks);
+    // }
     setUsages((currentUsages) => {
       const matching = currentUsages.filter((usage) => namesMatch(usage.itemName, itemName) && phDateString(usage.date) === getTodayDate());
       const next = (() => {
@@ -845,17 +857,38 @@ export function SalePurchaseTransactions({
     resetStockForm();
   };
 
-  const updateUnitSetup = async (id: string, field: "purchaseUnitSize" | "unit" | "cupUsageAmount", value: string) => {
+  // const updateUnitSetup = async (id: string, field: "purchaseUnitSize" | "unit" | "cupUsageAmount", value: string) => {
+  //   const parsed = field === "unit" ? value.trim() : value === "" ? undefined : Number(value);
+  //   if (field !== "unit" && parsed !== undefined && (!Number.isFinite(Number(parsed)) || Number(parsed) <= 0)) return;
+  //   const draft = unitSetupDrafts[id];
+  //   const nextStocks = stocks.map((item) => item.id === id ? {
+  //     ...item,
+  //     purchaseUnitSize: draft?.purchaseUnitSize === "" ? undefined : draft?.purchaseUnitSize !== undefined ? Number(draft.purchaseUnitSize) : item.purchaseUnitSize,
+  //     unit: draft?.unit ?? item.unit,
+  //     cupUsageAmount: draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount,
+  //     [field]: parsed,
+  //   } : item);
+  //   setStocks(nextStocks);
+  //   await persistInventory(nextStocks);
+  // };
+  const updateUnitSetup = async (
+    id: string,
+    field: "purchaseUnitSize" | "unit" | "cupUsageAmount",
+    value: string,
+  ) => {
     const parsed = field === "unit" ? value.trim() : value === "" ? undefined : Number(value);
     if (field !== "unit" && parsed !== undefined && (!Number.isFinite(Number(parsed)) || Number(parsed) <= 0)) return;
     const draft = unitSetupDrafts[id];
-    const nextStocks = stocks.map((item) => item.id === id ? {
-      ...item,
-      purchaseUnitSize: draft?.purchaseUnitSize === "" ? undefined : draft?.purchaseUnitSize !== undefined ? Number(draft.purchaseUnitSize) : item.purchaseUnitSize,
-      unit: draft?.unit ?? item.unit,
-      cupUsageAmount: draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount,
-      [field]: parsed,
-    } : item);
+    const nextStocks = stocks.map((item) => {
+      if (item.id !== id) return item;
+      const purchaseUnitSize = draft?.purchaseUnitSize === "" ? undefined : draft?.purchaseUnitSize !== undefined ? Number(draft.purchaseUnitSize) : item.purchaseUnitSize;
+      const cupUsageAmount = draft?.cupUsageAmount === "" ? undefined : draft?.cupUsageAmount !== undefined ? Number(draft.cupUsageAmount) : item.cupUsageAmount;
+      const merged: StockItem = { ...item, purchaseUnitSize, unit: draft?.unit ?? item.unit, cupUsageAmount, [field]: parsed } as StockItem;
+      return {
+        ...merged,
+        cupsMake: merged.purchaseUnitSize && merged.cupUsageAmount ? merged.purchaseUnitSize / merged.cupUsageAmount : undefined,
+      };
+    });
     setStocks(nextStocks);
     await persistInventory(nextStocks);
   };
@@ -932,6 +965,7 @@ export function SalePurchaseTransactions({
       itemName: item.name,
       quantityAdded: addQty,
       date: nowTime,
+      unit: item.unit,
     };
     const nextRestocks = [newRestock, ...restocks];
     await persistRestockChanges(nextStocks, nextRestocks);
@@ -957,8 +991,11 @@ export function SalePurchaseTransactions({
 
     if (editRestockId) {
       const previous = restocks.find((record) => record.id === editRestockId);
+      // const nextRestocks = restocks.map((r) =>
+      //   r.id === editRestockId ? { ...r, itemName: restockItem, quantityAdded: qty, date: stamp } : r,
+      // );
       const nextRestocks = restocks.map((r) =>
-        r.id === editRestockId ? { ...r, itemName: restockItem, quantityAdded: qty, date: stamp } : r,
+        r.id === editRestockId ? { ...r, itemName: restockItem, quantityAdded: qty, date: stamp, unit: restockStockItem?.unit ?? r.unit } : r,
       );
       let nextStocks = stocks;
       if (previous) {
@@ -976,7 +1013,7 @@ export function SalePurchaseTransactions({
       await persistRestockChanges(nextStocks, nextRestocks);
       setEditRestockId(null);
     } else {
-      const newRestock: RestockRecord = { id: Date.now().toString(), itemName: restockItem, quantityAdded: qty, date: stamp };
+      const newRestock: RestockRecord = { id: Date.now().toString(), itemName: restockItem, quantityAdded: qty, date: stamp, unit: restockStockItem?.unit };
       const nextRestocks = [newRestock, ...restocks];
       const nextStocks = stocks.map((s) =>
         namesMatch(s.name, restockItem) ? { ...s, stock: s.stock + qty } : s,
@@ -991,6 +1028,7 @@ export function SalePurchaseTransactions({
     setRestockItem(r.itemName);
     setRestockQty(r.quantityAdded.toString());
     setRestockDate(phDateString(r.date));
+  
   };
 
   const handleDeleteRestock = async (id: string) => {
@@ -1596,12 +1634,15 @@ export function SalePurchaseTransactions({
                   const isLiveDate = isLiveRange;
                   const recipe = costingIngredientForItem(costings, s.name);
                   const configuredUsage = configuredUsagePerUnit(s);
-                  const cupsLeft = recipe
+                  // const cupsLeft = recipe
+                  //   ? cupsFromQuantity(remaining, recipe)
+                  //   : configuredCupsLeft(s, remaining) ??
+                  //     (s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null
+                  //       ? Number(s.cupsMake)
+                  //       : null);
+                  const cupsLeft = recipe 
                     ? cupsFromQuantity(remaining, recipe)
-                    : configuredCupsLeft(s, remaining) ??
-                      (s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null
-                        ? Number(s.cupsMake)
-                        : null);
+                    : configuredCupsLeft(s, remaining) ?? (s.unit.trim().toLowerCase() !== "pcs" && s.cupsMake != null ? Number(s.cupsMake) : null);
                   return (
                     <tr key={s.id} className="border-b border-neutral-200 text-xs">
                       <td className="p-2 border-r border-neutral-200 font-medium">{s.name}</td>
@@ -1731,8 +1772,11 @@ export function SalePurchaseTransactions({
                     <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium">{r.date}</td>
                     <td className="p-3 border-r border-neutral-200 font-medium">{r.itemName}</td>
                     <td className="p-3 border-r border-neutral-200 text-right font-bold text-black">+{r.quantityAdded}</td>
-                    <td className="p-3 border-r border-neutral-200 text-neutral-600">
+                    {/* <td className="p-3 border-r border-neutral-200 text-neutral-600">
                       {stocks.find((item) => namesMatch(item.name, r.itemName))?.unit || ""}
+                    </td> */}
+                    <td className="p-3 border-r border-neutral-200 text-neutral-600">
+                      {r.unit || stocks.find((item) => namesMatch(item.name, r.itemName))?.unit || ""}
                     </td>
                     <td className="p-3 text-center">
                       <RowActions
