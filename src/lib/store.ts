@@ -802,7 +802,7 @@ async function writeStore(store: StoreData): Promise<void> {
     ),
     supabase.from("order_items").upsert(store.orders.flatMap((order) => order.items.map((item, index) => ({ id: `${order.id}-item-${index + 1}`, order_id: order.id, menu_item_id: item.productId, product_id_snapshot: item.productId, name_snapshot: item.name, qty: item.qty, price_snapshot: item.price }))), { onConflict: "id" }),
     supabase.from("usage_logs").upsert(store.usageLogs.map((log) => ({ id: log.id, order_id: log.orderId || null, order_item_id: log.orderItemId || null, item_name_snapshot: log.itemName, used_amount: log.usedAmount, unit: log.unit })), { onConflict: "id" }),
-    supabase.from("restocks").upsert(store.restocks.map((record) => ({ id: record.id, item_name_snapshot: record.itemName, quantity_added: record.quantityAdded, unit: record.unit ?? null })), { onConflict: "id" }),
+    supabase.from("restocks").upsert(store.restocks.map((record) => ({ id: record.id, item_name_snapshot: record.itemName, quantity_added: record.quantityAdded, unit: record.unit ?? null, created_at: record.date, })), { onConflict: "id" }),
     supabase.from("off_requests").upsert(
       store.offRequests.map((r) => ({
         id: r.id,

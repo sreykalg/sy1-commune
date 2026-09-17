@@ -743,15 +743,60 @@ export function SalePurchaseTransactions({
     return { nextStocks, nextUsages };
   };
 
-  const persistInventoryAndUsage = async (nextStocks: StockItem[], nextUsages: UsageRecord[]) => {
+  // const persistInventoryAndUsage = async (nextStocks: StockItem[], nextUsages: UsageRecord[]) => {
+  //   setStocks(nextStocks);
+  //   setUsages(nextUsages);
+  //   await persistInventory(nextStocks);
+  //   await saveAdminData({
+  //     usageLogs: nextUsages.map((entry) => ({
+  //       id: entry.id,
+  //       orderId: store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
+  //       orderItemId: store.usageLogs.find((item) => item.id === entry.id)?.orderItemId || "",
+  //       date: entry.date,
+  //       itemName: entry.itemName,
+  //       usedAmount: entry.usedAmount,
+  //       unit: entry.unit,
+  //       remaining: entry.remaining,
+  //     })),
+  //   });
+  // };
+  const persistInventoryAndUsage = async (
+    nextStocks: StockItem[],
+    nextUsages: UsageRecord[],
+  ) => {
     setStocks(nextStocks);
     setUsages(nextUsages);
-    await persistInventory(nextStocks);
+
+    const existingById = new Map(
+      store.inventory.map((item) => [item.id, item]),
+    );
+
+    const inventory = nextStocks.map((item) => {
+      const existing = existingById.get(item.id);
+
+      return {
+        id: item.id,
+        name: item.name,
+        category: item.category || existing?.category || "",
+        stock: item.stock,
+        openingStock: item.openingStock ?? existing?.openingStock,
+        unit: item.unit || existing?.unit || "pcs",
+        cost: existing?.cost ?? 0,
+        maxStock: existing?.maxStock ?? item.stock,
+        purchaseUnitSize: item.purchaseUnitSize,
+        cupUsageAmount: item.cupUsageAmount,
+        cupsMake: item.cupsMake ?? existing?.cupsMake,
+      };
+    });
+
     await saveAdminData({
+      inventory,
       usageLogs: nextUsages.map((entry) => ({
         id: entry.id,
-        orderId: store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
-        orderItemId: store.usageLogs.find((item) => item.id === entry.id)?.orderItemId || "",
+        orderId:
+          store.usageLogs.find((item) => item.id === entry.id)?.orderId || "",
+        orderItemId:
+          store.usageLogs.find((item) => item.id === entry.id)?.orderItemId || "",
         date: entry.date,
         itemName: entry.itemName,
         usedAmount: entry.usedAmount,
@@ -1769,7 +1814,13 @@ export function SalePurchaseTransactions({
                   }
                   return filteredRestocks.map((r) => (
                   <tr key={r.id} className="border-b border-neutral-200 text-xs">
-                    <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium">{r.date}</td>
+                    <td className="p-3 border-r border-neutral-200 text-neutral-600 font-medium">
+                      {new Date(r.date).toLocaleString("en-PH", {
+                        timeZone: "Asia/Manila",
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </td>
                     <td className="p-3 border-r border-neutral-200 font-medium">{r.itemName}</td>
                     <td className="p-3 border-r border-neutral-200 text-right font-bold text-black">+{r.quantityAdded}</td>
                     {/* <td className="p-3 border-r border-neutral-200 text-neutral-600">
