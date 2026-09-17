@@ -7,7 +7,7 @@ import { orderLineOptionsLabel, pricedOrderLine } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { ingredientsForOrderLine, roundQty } from "@/lib/inventory";
 import { canUsePos } from "@/lib/users";
-import { getStore, updateStore } from "@/lib/store";
+import { getStore, updateStore, supabaseAdmin } from "@/lib/store";
 import type {
   MenuItem,
   Order,
@@ -162,25 +162,108 @@ export async function saveAdminData(data: {
   return { ok: true };
 }
 
-export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing" | "usage", id: string) {
-  await requireInventoryAccess(kind === "order" || kind === "costing" || kind === "usage");
-  await updateStore((store) => {
-    if (kind === "order") {
-      store.orders = store.orders.filter((order) => order.id !== id);
-      store.printJobs = store.printJobs.filter((job) => job.orderId !== id);
-      store.usageLogs = store.usageLogs.filter((entry) => entry.orderId !== id);
-    } else if (kind === "inventory") {
-      store.inventory = store.inventory.filter((item) => item.id !== id);
-    } else if (kind === "restock") {
-      store.restocks = store.restocks.filter((record) => record.id !== id);
-    } else if (kind === "costing") {
-      store.costings = store.costings.filter((record) => record.id !== id);
-    } else {
-      store.usageLogs = store.usageLogs.filter((record) => record.id !== id);
+// export async function deleteAdminRecord(kind: "order" | "inventory" | "restock" | "costing" | "usage", id: string) {
+//   await requireInventoryAccess(kind === "order" || kind === "costing" || kind === "usage");
+//   await updateStore((store) => {
+//     if (kind === "order") {
+//       store.orders = store.orders.filter((order) => order.id !== id);
+//       store.printJobs = store.printJobs.filter((job) => job.orderId !== id);
+//       store.usageLogs = store.usageLogs.filter((entry) => entry.orderId !== id);
+//     } else if (kind === "inventory") {
+//       store.inventory = store.inventory.filter((item) => item.id !== id);
+//     } else if (kind === "restock") {
+//       store.restocks = store.restocks.filter((record) => record.id !== id);
+//     } else if (kind === "costing") {
+//       store.costings = store.costings.filter((record) => record.id !== id);
+//     } else {
+//       store.usageLogs = store.usageLogs.filter((record) => record.id !== id);
+//     }
+//   });
+//   revalidatePath("/pos");
+//   revalidatePath("/admin");
+//   return { ok: true };
+// }
+export async function deleteAdminRecord(
+  kind: "order" | "inventory" | "restock" | "costing" | "usage",
+  id: string,
+) {
+  await requireInventoryAccess(
+    kind === "order" || kind === "costing" || kind === "usage",
+  );
+
+  const supabase = supabaseAdmin();
+
+  if (kind === "order") {
+    const { error: usageError } = await supabase
+      .from("usage_logs")
+      .delete()
+      .eq("order_id", id);
+
+    if (usageError) {
+      throw new Error(`Unable to delete order usage logs: ${usageError.message}`);
     }
-  });
+
+    const { error: orderItemsError } = await supabase
+      .from("order_items")
+      .delete()
+      .eq("order_id", id);
+
+    if (orderItemsError) {
+      throw new Error(`Unable to delete order items: ${orderItemsError.message}`);
+    }
+
+    const { error: orderError } = await supabase
+      .from("orders")
+      .delete()
+      .eq("id", id);
+
+    if (orderError) {
+      throw new Error(`Unable to delete order: ${orderError.message}`);
+    }
+
+    revalidatePath("/pos");
+    revalidatePath("/admin");
+
+    return { ok: true };
+  }
+
+  if (kind === "inventory") {
+    const { error } = await supabase
+      .from("inventory_items")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(`Unable to delete inventory item: ${error.message}`);
+    }
+  } else if (kind === "restock") {
+    const { error } = await supabase
+      .from("restocks")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(`Unable to delete restock: ${error.message}`);
+    }
+  } else if (kind === "usage") {
+    const { error } = await supabase
+      .from("usage_logs")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(`Unable to delete usage log: ${error.message}`);
+    }
+  } else if (kind === "costing") {
+    // Keep the existing costing logic for now.
+    await updateStore((store) => {
+      store.costings = store.costings.filter((record) => record.id !== id);
+    });
+  }
+
   revalidatePath("/pos");
   revalidatePath("/admin");
+
   return { ok: true };
 }
 
