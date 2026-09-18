@@ -214,15 +214,14 @@ function addonIngredientsForOrderLine(
 
   return (line.addons ?? []).flatMap((selected) => {
     const spec = catalog.get(String(selected.id ?? ""));
-    const inventoryItemId = String(spec?.inventoryItemId || selected.inventoryItemId || "").trim();
+    const inventoryItemId = String(spec?.inventoryItemId ?? "").trim();
+    if (!inventoryItemId) return [];
     const usageAmount = Number(spec?.usageAmount ?? selected.usageAmount) || 0;
     const qty = Math.max(1, Number(selected.qty) || 1);
     const amount = usageAmount * qty;
     if (amount <= 0) return [];
 
-    const stock =
-      inventory.find((item) => item.id === inventoryItemId) ??
-      inventory.find((item) => namesMatch(item.name, spec?.name || selected.name));
+    const stock = inventory.find((item) => item.id === inventoryItemId);
     if (!stock) return [];
 
     return [
