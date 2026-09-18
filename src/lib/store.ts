@@ -346,17 +346,11 @@ function normalizeStore(store: StoreData): StoreData {
   } else {
     const configuredRecipeKeys = new Set(Object.keys(store.recipes));
     const menuNameById = new Map(store.menu.map((item) => [item.id, item.name]));
-    store.usageLogs = store.usageLogs
-      .filter((usage) => {
-        if (!usage.orderId || !usage.orderItemId) return true;
-        const recipeName = menuNameById.get(usage.orderItemId);
-        return configuredRecipeKeys.has(usage.orderItemId) || (recipeName ? configuredRecipeKeys.has(recipeName) : false);
-      })
-      .map((usage) =>
-        /milk/i.test(usage.itemName) && Number(usage.usedAmount) >= 100
-          ? { ...usage, usedAmount: Number((Number(usage.usedAmount) / 10).toFixed(2)), unit: "ml" }
-          : usage,
-      );
+    store.usageLogs = store.usageLogs.filter((usage) => {
+      if (!usage.orderId || !usage.orderItemId) return true;
+      const recipeName = menuNameById.get(usage.orderItemId);
+      return configuredRecipeKeys.has(usage.orderItemId) || (recipeName ? configuredRecipeKeys.has(recipeName) : false);
+    });
   }
   if (!Array.isArray(store.restocks)) {
     store.restocks = [];
