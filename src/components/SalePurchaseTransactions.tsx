@@ -2,8 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, saveAdminData } from "@/actions/pos";
 import { costingIngredientForItem, cupsFromQuantity, cupSkuForItem, formatQty, ingredientsForOrderLine, namesMatch, perCupAmount, remainingForUsages, roundQty, stockLedgerForRange } from "@/lib/inventory";
 import { phDateString, phDateTimeLabel, phIsoFromDate, phNowDateTime, phPeriodBounds, type PeriodRange } from "@/lib/datetime";
-import { isFoodOrPastry, orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
-import type { Order, RecipeIngredient, StoreData } from "@/lib/types";
+import { drinkDisplayName, isFoodOrPastry, orderLineDetailsLabel, orderSoldAsLabel, orderSoldAsLines } from "@/lib/menu";
+import type { Order, OrderItem, RecipeIngredient, StoreData } from "@/lib/types";
 
 function inventoryUsagePerPiece(item: StockItem, used: number) {
   const unitSize = Number(item.purchaseUnitSize);
@@ -51,7 +51,7 @@ type SalePurchaseTransactionsProps = {
 type Transaction = {
   id: string;
   productName: string;
-  productLines: string[];
+  orderItems: OrderItem[];
   type: "Purchase" | "Sale";
   quantity: number;
   price: number;
@@ -70,7 +70,7 @@ function ordersToTransactions(orders: Order[]): Transaction[] {
       return {
         id: order.id,
         productName: productLines.join(", "),
-        productLines,
+        orderItems: order.items,
         type: (order.recordType === "Purchase" ? "Purchase" : "Sale") as "Purchase" | "Sale",
         quantity,
         price: quantity > 0 ? amount / quantity : amount,
@@ -85,14 +85,18 @@ function ordersToTransactions(orders: Order[]): Transaction[] {
 const iconBtn =
   "inline-flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-all hover:bg-neutral-100 hover:text-neutral-900";
 
-function DrinkLines({ lines }: { lines: string[] }) {
-  if (lines.length === 0) return <span>—</span>;
-  if (lines.length === 1) return <span className="break-words">{lines[0]}</span>;
+function DrinkLines({ items }: { items: OrderItem[] }) {
+  if (items.length === 0) return <span>—</span>;
   return (
     <ul className="space-y-0.5">
-      {lines.map((line, index) => (
-        <li key={`${line}-${index}`} className="break-words">
-          {line}
+      {items.map((item, index) => (
+        <li key={`${item.productId}-${index}`} className="break-words">
+          <span>{item.qty}× {drinkDisplayName(item)}</span>
+          {orderLineDetailsLabel(item) ? (
+            <span className="block text-[11px] font-normal leading-4 text-neutral-500">
+              {orderLineDetailsLabel(item)}
+            </span>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -1205,6 +1209,7 @@ export function SalePurchaseTransactions({
           date: order.createdAt,
           soldAs,
           soldAsLines,
+          orderItems: order.items,
           items,
         };
       })
@@ -1618,7 +1623,7 @@ export function SalePurchaseTransactions({
                         {phDateTimeLabel(t.createdAt)}
                       </td>
                       <td className="p-3 border-r border-neutral-200 font-medium">
-                        <DrinkLines lines={t.productLines} />
+                        <DrinkLines items={t.orderItems} />
                       </td>
                       <td className="p-3 border-r border-neutral-200 text-right">{t.quantity}</td>
                       <td className="p-3 border-r border-neutral-200 text-right">₱{t.price.toFixed(2)}</td>
@@ -2066,7 +2071,7 @@ export function SalePurchaseTransactions({
                             {phDateTimeLabel(group.date)}
                           </td>
                           <td className="p-3 text-neutral-600">
-                            <DrinkLines lines={group.soldAsLines} />
+                            <DrinkLines items={group.orderItems} />
                           </td>
                         </tr>
                         {open ? (

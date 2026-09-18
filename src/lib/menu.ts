@@ -75,6 +75,31 @@ export function normalizeMenuAddons(item: Pick<MenuItem, "addons"> | undefined):
   });
 }
 
+export function normalizeOrderAddons(value: unknown): OrderAddon[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") return [];
+    const addon = entry as Partial<OrderAddon>;
+    const name = String(addon.name ?? "").trim();
+    if (!name) return [];
+
+    const inventoryItemId = String(addon.inventoryItemId ?? "").trim();
+    const usageAmount = Math.max(0, Number(addon.usageAmount) || 0);
+    const usageUnit = String(addon.usageUnit ?? "").trim();
+
+    return [{
+      id: String(addon.id ?? "").trim() || addonIdFromName(name, index),
+      name,
+      price: Math.max(0, Math.round(Number(addon.price) || 0)),
+      qty: Math.max(1, Math.min(9, Math.floor(Number(addon.qty) || 1))),
+      inventoryItemId: inventoryItemId || undefined,
+      usageAmount: usageAmount || undefined,
+      usageUnit: usageUnit || undefined,
+    }];
+  });
+}
+
 // export function addonAllowsQty(addon: Pick<MenuAddon, "name" | "qtyEnabled">) {
 //   return /espresso|shot/i.test(addon.name);
 // }
@@ -137,6 +162,23 @@ export function orderLineOptionsLabel(item: Pick<OrderItem, "style" | "addons" |
     parts.push(addonPriceLabel(addon));
   }
   return parts.join(", ");
+}
+
+export function orderLineDetailsLabel(item: Pick<OrderItem, "style" | "addons" | "name">) {
+  const style =
+    parseDrinkStyle(item.style) ??
+    (/·\s*hot$/i.test(item.name) || /\(hot\)$/i.test(item.name)
+      ? "hot"
+      : /·\s*iced$/i.test(item.name) || /\(iced\)$/i.test(item.name)
+        ? "iced"
+        : undefined);
+  const addons = normalizeOrderAddons(item.addons).map(addonPriceLabel);
+  if (!style && addons.length === 0) return "";
+
+  return [
+    style ? drinkStyleLabel(style) : "",
+    addons.length > 0 ? `Add-ons: ${addons.join(", ")}` : "No add-ons",
+  ].filter(Boolean).join(" · ");
 }
 
 export function drinkDisplayName(item: Pick<OrderItem, "name">) {
