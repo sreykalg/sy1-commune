@@ -12,7 +12,7 @@ import type {
   StoreData,
 } from "@/lib/types";
 import { CUP_SKUS, cupSkuForItem } from "@/lib/inventory";
-import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuAddons, normalizeMenuStyles } from "@/lib/menu";
+import { DEFAULT_MENU, MENU_CATEGORIES, normalizeMenuAddons, normalizeMenuStyles, normalizeOrderAddons, parseDrinkStyle } from "@/lib/menu";
 import { parsePayment } from "@/lib/payments";
 import { DEFAULT_LOGIN_GATES, normalizeLoginGates } from "@/lib/staff-gates";
 import { DEFAULT_PROMOS } from "@/lib/promos";
@@ -567,7 +567,7 @@ async function readStore(): Promise<StoreData> {
       cupUsageAmount: row.cup_usage_amount != null ? Number(row.cup_usage_amount) : undefined,
       cupsMake: row.cups_make != null ? Number(row.cups_make) : undefined,
     })),
-    orders: rows.map((row) => ({ id: row.id, createdAt: row.created_at, baristaName: row.barista_name, items: items.filter((item) => item.order_id === row.id).map((item) => ({ productId: item.product_id_snapshot, name: item.name_snapshot, qty: item.qty, price: item.price_snapshot })), subtotal: row.subtotal, discount: row.discount, promoLabel: row.promo_label ?? undefined, total: row.total, paymentMethod: parsePayment(row.payment_method), ticketNo: row.ticket_no, paid: row.paid, change: row.change, voided: row.voided, voidReason: row.void_reason ?? undefined })),
+    orders: rows.map((row) => ({ id: row.id, createdAt: row.created_at, baristaName: row.barista_name, items: items.filter((item) => item.order_id === row.id).map((item) => ({ productId: item.product_id_snapshot, name: item.name_snapshot, qty: item.qty, price: item.price_snapshot, style: parseDrinkStyle(item.style), addons: normalizeOrderAddons(item.addons) })), subtotal: row.subtotal, discount: row.discount, promoLabel: row.promo_label ?? undefined, total: row.total, paymentMethod: parsePayment(row.payment_method), ticketNo: row.ticket_no, paid: row.paid, change: row.change, voided: row.voided, voidReason: row.void_reason ?? undefined })),
     usageLogs: (usageLogs.data ?? []).map((row) => ({ id: row.id, orderId: row.order_id ?? "", orderItemId: row.order_item_id ?? "", date: row.created_at, itemName: row.item_name_snapshot, usedAmount: Number(row.used_amount), unit: row.unit })),
     restocks: (restocks.data ?? []).map((row) => ({ id: row.id, itemName: row.item_name_snapshot, quantityAdded: Number(row.quantity_added), date: row.created_at, unit: row.unit ?? undefined })),
     costings: (costings.data ?? []).map((row) => ({ id: row.id, productName: row.product_name, ingredients: (costingIngredients.data ?? []).filter((ingredient) => ingredient.costing_id === row.id).map((ingredient) => ({ name: ingredient.name, amount: Number(ingredient.amount), unit: ingredient.unit, outputCups: ingredient.output_cups })) })),
@@ -816,7 +816,7 @@ async function writeStore(store: StoreData): Promise<void> {
       })),
       { onConflict: "id" },
     ),
-    supabase.from("order_items").upsert(store.orders.flatMap((order) => order.items.map((item, index) => ({ id: `${order.id}-item-${index + 1}`, order_id: order.id, menu_item_id: item.productId, product_id_snapshot: item.productId, name_snapshot: item.name, qty: item.qty, price_snapshot: item.price }))), { onConflict: "id" }),
+    supabase.from("order_items").upsert(store.orders.flatMap((order) => order.items.map((item, index) => ({ id: `${order.id}-item-${index + 1}`, order_id: order.id, menu_item_id: item.productId, product_id_snapshot: item.productId, name_snapshot: item.name, qty: item.qty, price_snapshot: item.price, style: parseDrinkStyle(item.style) ?? null, addons: normalizeOrderAddons(item.addons) }))), { onConflict: "id" }),
     supabase.from("usage_logs").upsert(store.usageLogs.map((log) => ({ id: log.id, order_id: log.orderId || null, order_item_id: log.orderItemId || null, item_name_snapshot: log.itemName, used_amount: log.usedAmount, unit: log.unit })), { onConflict: "id" }),
     supabase.from("restocks").upsert(store.restocks.map((record) => ({ id: record.id, item_name_snapshot: record.itemName, quantity_added: record.quantityAdded, unit: record.unit ?? null, created_at: record.date, })), { onConflict: "id" }),
     supabase.from("off_requests").upsert(
